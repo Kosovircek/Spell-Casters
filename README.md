@@ -17,10 +17,11 @@ Open http://localhost:3000, pick a name and a room name, and share the page URL 
 | --- | --- |
 | Move | W A S D or arrow keys (up is up on screen; same speed in all 8 directions) |
 | Tap Morse | Numpad 5 (Space also works). Short press = dot, long press = dash |
+| Instant dash | Numpad 0 types a dash right away, no holding (mix freely with Numpad 5) |
 | Build a spell | Pause after each letter; finished letters stack up above your wizard (up to 8) |
 | Cast | Numpad 7 8 9 4 6 1 2 3 sends the whole spell in that direction |
 | Remove last letter | Backspace |
-| Clear the spell | Numpad 0 or Numpad . |
+| Clear the spell | Numpad . |
 | Morse cheat sheet | H |
 | Settings (speed, letter pause, sound) | Esc |
 

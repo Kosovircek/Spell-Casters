@@ -38,6 +38,12 @@ export class AudioManager {
     this.toneOff();
     this.tone = this.startTone('sine', 620, 0.18);
   }
+  /** A fixed-length key tone, for the instant dash key. Separate handle so it never cuts a held tone. */
+  beep(ms) {
+    if (!this.settings.tone || !this.context()) return;
+    const h = this.startTone('sine', 620, 0.18);
+    setTimeout(() => this.stopTone(h), ms);
+  }
   toneOff() { this.stopTone(this.tone); this.tone = null; }
   /** The Bellwraith's bell: lower and rounder than your own key, so you can tell them apart. */
   bellOn() {

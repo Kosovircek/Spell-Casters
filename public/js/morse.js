@@ -32,7 +32,17 @@ export class MorseKey {
     if (!this.downAt) return;
     const held = t - this.downAt;
     this.downAt = 0;
-    this.buf += held < this.dashAt ? '.' : '-';
+    this.add(held < this.dashAt ? '.' : '-');
+  }
+  // Instant dash (numpad 0): no hold needed. Counts as a keying event, so the letter gap restarts.
+  dash() {
+    if (this.downAt) return;
+    clearTimeout(this.gapTimer);
+    this.bad = null;
+    this.add('-');
+  }
+  add(symbol) {
+    this.buf += symbol;
     if (this.buf.length > 5) { this.fail(); return; }
     this.gapTimer = setTimeout(() => this.finish(), this.unit * this.gapUnits);
     this.onChange();
