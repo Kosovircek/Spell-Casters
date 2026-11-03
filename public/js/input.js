@@ -30,7 +30,8 @@ export class Input {
 
     if (MORSE_KEYS.includes(e.code)) { e.preventDefault(); if (!e.repeat) { g.morse.press(performance.now()); g.audio.toneOn(); } return; }
     if (AIM_KEYS[e.code]) { e.preventDefault(); if (!e.repeat) this.castToward(AIM_KEYS[e.code]); return; }
-    if (e.code === 'Numpad0' || e.code === 'NumpadDecimal') { e.preventDefault(); g.morse.clear(); return; }
+    if (e.code === 'Numpad0') { e.preventDefault(); if (!e.repeat) { g.morse.dash(); g.audio.beep(g.morse.dashAt * 1.5); } return; }
+    if (e.code === 'NumpadDecimal') { e.preventDefault(); g.morse.clear(); return; }
     if (e.code === 'Backspace') { e.preventDefault(); g.morse.backspace(); return; }
     if (e.code === 'KeyH') { g.hud.toggleCheatSheet(); return; }
     if (MOVE_KEYS[e.code]) { e.preventDefault(); this.held.add(e.code); this.sendMove(); }

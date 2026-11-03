@@ -75,7 +75,7 @@ export class Hud {
     if (morse.bad && !morse.buf) h.textContent = 'Not a letter, it was dropped. Keep typing or aim to cast.';
     else if (morse.buf) h.textContent = 'Keep tapping, pause for the next letter, or aim to cast';
     else if (morse.spell) h.textContent = `Add letters, or aim with the numpad to cast ${morse.spell}. Backspace removes a letter.`;
-    else h.textContent = 'Tap Numpad 5 (or Space). Short = dot, long = dash';
+    else h.textContent = 'Tap Numpad 5 (or Space). Short = dot, long = dash. Numpad 0 = instant dash';
   }
   /** Bar that fills while the key is held; it turns yellow once the press counts as a dash. */
   renderHoldBar(morse, now) {
