@@ -9,6 +9,7 @@ export class Input {
     this.game = game;
     this.held = new Set();     // movement keys currently down
     this.lastMove = '0,0';     // last movement vector sent, to avoid spamming the server
+    this.touchMove = null;     // { x, y } from the touch joystick while a finger is on it
     addEventListener('keydown', (e) => this.onKeyDown(e));
     addEventListener('keyup', (e) => this.onKeyUp(e));
     addEventListener('blur', () => this.releaseAll());
@@ -51,15 +52,21 @@ export class Input {
     this.game.network.cast(word, d.x, d.y);
   }
 
-  /** Same speed in all 8 directions. */
+  /** Touch joystick direction (a unit vector), or null when the finger is lifted. */
+  setTouchMove(x, y) {
+    this.touchMove = x === null ? null : { x, y };
+    this.sendMove();
+  }
+
+  /** Same speed in all 8 directions. The touch joystick wins while it is held. */
   sendMove() {
     let ux = 0, uy = 0;
     for (const k of this.held) { ux += MOVE_KEYS[k][0]; uy += MOVE_KEYS[k][1]; }
-    const d = normalize(Math.sign(ux), Math.sign(uy));
-    const key = d.x.toFixed(3) + ',' + d.y.toFixed(3);
+    const d = this.touchMove || normalize(Math.sign(ux), Math.sign(uy));
+    const key = d.x.toFixed(2) + ',' + d.y.toFixed(2);
     if (key !== this.lastMove && this.game.network.connected) { this.game.network.move(d.x, d.y); this.lastMove = key; }
   }
-  stopWalking() { this.held.clear(); this.sendMove(); }
+  stopWalking() { this.held.clear(); this.game.touch?.releaseAll(); this.touchMove = null; this.sendMove(); }
   toggleSettings() { this.game.settings.togglePanel(); this.stopWalking(); }
 
   releaseAll() {

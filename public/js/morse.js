@@ -34,6 +34,13 @@ export class MorseKey {
     this.downAt = 0;
     this.add(held < this.dashAt ? '.' : '-');
   }
+  // Drop a press without adding a symbol (the touch key turned it into a cast swipe).
+  cancelPress() {
+    if (!this.downAt) return;
+    this.downAt = 0;
+    if (this.buf) this.gapTimer = setTimeout(() => this.finish(), this.unit * this.gapUnits);
+    this.onChange();
+  }
   // Instant dash (numpad 0): no hold needed. Counts as a keying event, so the letter gap restarts.
   dash() {
     if (this.downAt) return;

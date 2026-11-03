@@ -9,7 +9,7 @@ export class Hud {
     setInterval(() => this.renderMessages(), 500);
   }
   show(roomCode) {
-    $('lobby').hidden = true; $('hud').hidden = false;
+    $('lobby').hidden = true; $('hud').hidden = false; $('touch').hidden = false;
     $('roomcode').textContent = 'Room: ' + roomCode + '  (share this page URL)';
   }
   get visible() { return !$('hud').hidden; }
@@ -72,7 +72,13 @@ export class Hud {
     else if (morse.bad) html += ` <span class="bad">${prettyMorse(morse.bad)} ?</span>`;
     $('morse-buf').innerHTML = html || '&nbsp;';
     const h = $('morse-hint');
-    if (morse.bad && !morse.buf) h.textContent = 'Not a letter, it was dropped. Keep typing or aim to cast.';
+    if (this.touchMode) {
+      if (morse.bad && !morse.buf) h.textContent = 'Not a letter, it was dropped. Keep tapping or swipe to cast.';
+      else if (morse.buf) h.textContent = 'Keep tapping, pause for the next letter, or swipe to cast';
+      else if (morse.spell) h.textContent = `Add letters, or swipe on the right to cast ${morse.spell}`;
+      else h.textContent = 'Tap = dot, hold = dash, swipe = cast. Drag on the left to walk';
+    }
+    else if (morse.bad && !morse.buf) h.textContent = 'Not a letter, it was dropped. Keep typing or aim to cast.';
     else if (morse.buf) h.textContent = 'Keep tapping, pause for the next letter, or aim to cast';
     else if (morse.spell) h.textContent = `Add letters, or aim with the numpad to cast ${morse.spell}. Backspace removes a letter.`;
     else h.textContent = 'Tap Numpad 5 (or Space). Short = dot, long = dash. Numpad 0 = instant dash';

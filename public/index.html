@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Spell Casters</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -24,8 +26,14 @@
     <b>Dash</b> Numpad 0 &nbsp; <b>Cancel</b> Numpad . / Backspace &nbsp; <b>Cheat sheet</b> H &nbsp; <b>Settings</b> Esc<br>
     <b>Items (Angband keys)</b> i inventory, e equipment, g pick up, q quaff, r read, t take off, I inspect, k destroy. Wear (w) and drop (d) from the inventory list<br>
     <b>Boss</b> The Bellwraith guards the stairs. Its name is shown only in Morse. Its bell shield blocks spells: listen to the letter its bell rings and cast that to break it<br>
+    <b>On a phone or tablet</b> hold it sideways. Left half: put a finger down and drag to walk. Right half: tap for a dot, hold for a dash, swipe to cast that way<br>
     <b>Save</b> Ctrl+S. Lobbies also save every 30 seconds, on each new floor and when everyone leaves
   </div>
+</div>
+
+<div id="touch" hidden>
+  <div id="stick-base" hidden><div id="stick-knob"></div></div>
+  <div id="touch-ripple" hidden></div>
 </div>
 
 <div id="hud" hidden>
@@ -42,7 +50,10 @@
   <div id="dead" hidden></div>
   <div id="msgline"></div>
   <div id="menu" hidden></div>
+  <button id="touch-settings" aria-label="Settings">⚙</button>
 </div>
+
+<div id="rotate">Turn your device sideways to play</div>
 
 <div id="settings" class="panel" hidden>
   <h2>Settings</h2>
@@ -52,6 +63,7 @@
   <p class="note">How long you must stop tapping before the letter is finished. Raise it if letters get cut off.</p>
   <label><input id="tone" type="checkbox"> Morse tone</label>
   <label><input id="sfx" type="checkbox"> Sound effects</label>
+  <label class="touch-only"><input id="haptics" type="checkbox"> Vibrate on touch Morse</label>
   <button id="close-settings">Back to the game</button>
 </div>
 
