@@ -66,3 +66,34 @@ html, body { margin: 0; height: 100%; background: #0b0910; color: #e8e2f4; font-
 #bossbar .bh { font-size: 12px; margin-top: 2px; }
 #bossbar .bh.sh { color: #b2ebf2; }
 #bossbar .bh.op { color: #ffd54f; }
+
+/* ---- touch controls (phones and tablets) */
+html, body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.panel, #menu { touch-action: pan-y; -webkit-user-select: text; user-select: text; }
+#touch, #game, #hud { touch-action: none; }
+#touch { position: fixed; inset: 0; }
+#stick-base { position: absolute; left: -56px; top: -56px; width: 112px; height: 112px; border-radius: 50%; border: 3px solid #e8e2f455; background: #0b091055; pointer-events: none; }
+#stick-knob { position: absolute; left: 30px; top: 30px; width: 46px; height: 46px; border-radius: 50%; background: #ffd54fb0; border: 3px solid #6a3d00; pointer-events: none; }
+#touch-ripple { position: absolute; left: -36px; top: -36px; width: 72px; height: 72px; border-radius: 50%; border: 3px solid #4fc3f7; background: #4fc3f733; pointer-events: none; }
+#touch-ripple.dash { border-color: #ffd54f; background: #ffd54f33; }
+#touch-settings, .touch-only { display: none; }
+body.touch #touch-settings { display: block; position: absolute; right: 12px; bottom: 12px; pointer-events: auto; width: 44px; height: 44px; font-size: 24px; line-height: 1; background: #0b0910b0; color: #e8e2f4; border: 2px solid #4b3d63; padding: 0; }
+body.touch .touch-only { display: block; }
+#rotate { display: none; }
+@media (orientation: portrait) {
+  body.touch #lobby[hidden] ~ #rotate { display: flex; position: fixed; inset: 0; z-index: 10; align-items: center; justify-content: center; text-align: center; padding: 24px; background: #0b0910; color: #ffd54f; font-size: 22px; }
+}
+/* Small landscape screens: shrink the HUD so the dungeon stays visible. */
+@media (max-height: 500px) {
+  body.touch #party { font-size: 11px; left: 6px; top: 6px; }
+  body.touch .pl { padding: 2px 6px; margin-bottom: 3px; }
+  body.touch .pl .stats { font-size: 10px; }
+  body.touch #info { right: 6px; top: 6px; padding: 3px 8px; font-size: 12px; }
+  body.touch #cheat { right: 6px; top: 46px; font-size: 10px; padding: 4px 6px; line-height: 1.3; }
+  body.touch #morse { bottom: 6px; padding: 3px 10px; min-width: 220px; }
+  body.touch #morse-buf { font-size: 20px; min-height: 26px; }
+  body.touch #morse-hint { font-size: 10px; }
+  body.touch #msgline { font-size: 11px; }
+  body.touch #banner { font-size: 20px; }
+  body.touch #bossbar { bottom: 70px; font-size: 12px; min-width: 240px; }
+}

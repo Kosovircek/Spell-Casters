@@ -11,6 +11,7 @@ import { EventEffects } from './effects.js';
 import { Hud } from './hud.js';
 import { InventoryMenu } from './inventory.js';
 import { Input } from './input.js';
+import { TouchInput } from './touch.js';
 import { Lobby } from './lobby.js';
 import { BellChant } from './bell.js';
 
@@ -39,6 +40,7 @@ export class Game {
     this.inventory = new InventoryMenu({ el: $('menu'), network: this.network, getMe: () => this.me, message: (t) => this.hud.message(t) });
     this.bell = new BellChant({ audio: this.audio, settings: this.settings });
     this.input = new Input(this);
+    this.touch = new TouchInput(this);
     this.lobby = new Lobby((name, room) => this.join(name, room));
 
     this.settings.bindPanel(this.morse);
@@ -55,6 +57,7 @@ export class Game {
   join(name, room) {
     this.roomCode = room;
     this.audio.context(); // unlock audio on this click
+    this.touch.goFullscreen();
     this.network.connect(name, room);
   }
 

@@ -18,9 +18,10 @@ export class Renderer {
     this.resize();
   }
 
-  /** Scale the low-res canvas up to fill the window in crisp half-steps. */
+  /** Scale the low-res canvas up to fill the window in crisp half-steps (phones: fill the screen exactly). */
   resize() {
-    const s = Math.max(1, Math.floor(Math.min(innerWidth / VIEW_W, innerHeight / VIEW_H) * 2) / 2);
+    const fit = Math.min(innerWidth / VIEW_W, innerHeight / VIEW_H);
+    const s = document.body.classList.contains('touch') ? fit : Math.max(1, Math.floor(fit * 2) / 2);
     const st = this.canvas.style;
     st.width = VIEW_W * s + 'px'; st.height = VIEW_H * s + 'px';
     st.left = Math.floor((innerWidth - VIEW_W * s) / 2) + 'px'; st.top = Math.floor((innerHeight - VIEW_H * s) / 2) + 'px';

@@ -25,6 +25,19 @@ Open http://localhost:3000, pick a name and a room name, and share the page URL 
 | Morse cheat sheet | H |
 | Settings (speed, letter pause, sound) | Esc |
 
+### Touch (phones and tablets)
+
+Hold the device sideways. The game goes full screen when you enter the dungeon (where the browser allows it).
+
+| Action | Touch |
+| --- | --- |
+| Move | Put a finger anywhere on the **left half** and drag. The joystick appears where you touched, and you walk toward your finger (any angle, full speed) |
+| Tap Morse | Anywhere on the **right half**: short tap = dot, long press = dash (same timing as Numpad 5; the phone buzzes lightly when a press becomes a dash) |
+| Cast | Swipe on the right half; the spell flies in the swipe direction, snapped to the 8 numpad directions |
+| Settings | The ⚙ button, bottom right. "Vibrate on touch Morse" turns the buzz off |
+
+You can walk and tap Morse at the same time. There is no clear button on touch: a wrong letter is dropped automatically, and a misspelled spell still removes the letters before the mistake. Inventory menus still need a keyboard.
+
 ## Rules
 
 - Hit an enemy with a spell that spells its name. A misspelled spell only removes the letters before your first mistake: casting RAD at RAT leaves `_ _ T`, so you finish it with a T.
