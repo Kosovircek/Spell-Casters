@@ -1,5 +1,5 @@
 // The ring menu: tap your own caster to open a segmented ring around them.
-// Each segment opens a touchable menu: pack, wield, equipment, potions or scrolls.
+// Each segment opens a touchable menu: pack, wield, equipment, potions, scrolls or the character sheet.
 // It is built for touch, but a mouse click on your caster opens it too.
 import { $, VIEW_W, TS } from './constants.js';
 import { chestSprite, itemSprite } from './art/sprites.js';
@@ -13,14 +13,17 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 const SEGMENTS = [
   { id: 'pack', label: 'Pack', icon: () => chestSprite(false, false),
     count: g => g.me?.pack.length || 0, run: g => g.inventory.open('pack') },
-  { id: 'wield', label: 'Wield', icon: () => itemSprite('staff_fork', 'gear', 'weapon'),
+  { id: 'wield', label: 'Wield', icon: () => itemSprite('wand', 'gear', 'weapon', '#aed581'),
     count: g => (g.me?.pack || []).filter(it => it.type === 'gear').length, run: g => g.inventory.open('pack', 'wield') },
-  { id: 'equip', label: 'Gear', icon: () => itemSprite('robe_vit', 'gear', 'body'),
+  { id: 'equip', label: 'Gear', icon: () => itemSprite('mail', 'gear', 'body', '#c62828'),
     count: g => Object.values(g.me?.equip || {}).filter(Boolean).length, run: g => g.inventory.open('equip') },
   { id: 'quaff', label: 'Potions', icon: () => itemSprite('pot_heal', 'potion'),
     count: g => countOf(g.me, 'potion'), run: g => g.inventory.open('pack', 'quaff') },
   { id: 'read', label: 'Scrolls', icon: () => itemSprite('scr_slow', 'scroll'),
     count: g => countOf(g.me, 'scroll'), run: g => g.inventory.open('pack', 'read') },
+  // The character sheet; its badge shows your level.
+  { id: 'stats', label: 'Stats', icon: () => itemSprite('m_odin', 'gear', 'head', '#ffd54f'),
+    count: g => g.me?.lv || 0, run: g => g.inventory.openSheet() },
 ];
 const countOf = (me, type) => (me?.pack || []).filter(it => it.type === type).reduce((a, it) => a + (it.n || 1), 0);
 

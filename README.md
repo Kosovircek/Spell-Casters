@@ -36,7 +36,7 @@ Hold the device sideways. The game goes full screen when you enter the dungeon (
 | Cast | Swipe on the right half; the spell flies in the swipe direction, snapped to the 8 numpad directions |
 | Settings | The ⚙ button, bottom right. "Vibrate on touch Morse" turns the buzz off |
 | Pick up | A quick **tap on the left half** (without dragging) picks up the items you are standing on |
-| Items | **Tap your own caster** (always in the middle of the screen) to open the ring menu around it. Segments: Pack, Wield, Gear (equipment), Potions and Scrolls. A number shows how many you have; greyed-out segments have nothing to act on. Tap a segment, then tap an item in the menu. Tap anywhere else to close the ring |
+| Items | **Tap your own caster** (always in the middle of the screen) to open the ring menu around it. Segments: Pack, Wield, Gear (equipment), Potions, Scrolls and Stats (the character sheet, with your level on its badge). A number shows how many you have; greyed-out segments have nothing to act on. Tap a segment, then tap an item in the menu. Tap anywhere else to close the ring |
 
 You can walk and tap Morse at the same time, also while an item menu is open (menus sit on the right edge, so the joystick stays free). Dragging from your caster walks, so the middle of the screen is never dead. There is no clear button on touch: a wrong letter is dropped automatically, and a misspelled spell still removes the letters before the mistake.
 
