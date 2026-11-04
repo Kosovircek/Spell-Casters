@@ -52,11 +52,12 @@ export class RingMenu {
     const p = g.renderer.toScreen(me.x, me.y);
     return { x: rect.left + p.x * scale, y: rect.top + (p.y - 9) * scale, scale }; // the sprite stands ~18px tall
   }
-  /** Did a touch at (x, y) land on my caster? The hit area is a bit larger than the sprite for fingers. */
+  /** Did a touch at (x, y) land on my caster? The hit area is much larger than the sprite: a fingertip
+   *  covers ~45 CSS px and phones report its centre a little below where you aimed. */
   hitsCaster(x, y) {
     const c = this.casterOnScreen();
     if (!c || this.game.me?.dead) return false;
-    return Math.hypot(x - c.x, y - c.y) < Math.max(26, TS * 0.85 * c.scale);
+    return Math.hypot(x - c.x, (y - c.y) * 0.85) < Math.max(46, TS * 1.6 * c.scale);
   }
 
   // ------------------------------------------------------------------ open / close

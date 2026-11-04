@@ -77,6 +77,8 @@ export class Player extends Character {
     const d = this.data, ctx = r.ctx, { x: sx, y: sy } = r.toScreen(this.x, this.y);
     if (d.dead) ctx.globalAlpha = 0.35;
     r.shadow(sx, sy, 6);
+    // On touch screens, a faint ring under your own caster shows it can be tapped for the item menu.
+    if (view.touch && this.id === view.myId && !d.dead) r.tapHint(sx, sy - 8, view.now);
     const frame = this.walkFrame;
     const img = wizardSprite(d.color, d.hurt && Math.floor(view.now / 60) % 2 === 0, frame);
     r.drawFacing(img, sx, sy - img.height + 2 - (this.moving && frame === 0 ? 1 : 0), img.width, img.height, this.face);
