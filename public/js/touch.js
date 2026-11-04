@@ -3,6 +3,8 @@
 // direction from that point to the finger is where the caster walks.
 // Right half: a Morse key anywhere. Short tap = dot, long press = dash (same timing as Numpad 5),
 // and a swipe casts the spell in the swiped direction, snapped to the 8 numpad directions.
+// Your own caster (always in the middle of the screen): a tap opens the ring menu. Dragging from
+// the caster walks, like the joystick, so the middle of the screen never feels dead.
 import { $, normalize } from './constants.js';
 
 const STICK_RADIUS = 48;   // px the knob can travel from the joystick centre
@@ -20,6 +22,7 @@ export class TouchInput {
     this.stick = null;    // { id, ox, oy } the finger steering the joystick
     this.key = null;      // { id, x, y, swipe } the finger on the Morse side
     this.dashTimer = null;
+    this.casterTap = null; // { id, x, y } a finger that came down on my caster
 
     // Any touch switches the page into touch mode (shows the touch hints and the settings button).
     addEventListener('touchstart', () => this.enable(), { passive: true, capture: true });
@@ -30,6 +33,8 @@ export class TouchInput {
     this.el.addEventListener('touchmove', (e) => this.onMove(e), opts);
     this.el.addEventListener('touchend', (e) => this.onEnd(e, false), opts);
     this.el.addEventListener('touchcancel', (e) => this.onEnd(e, true), opts);
+    // With a mouse, clicking your caster opens the ring menu too.
+    this.el.addEventListener('mousedown', (e) => { if (game.isPlaying() && (game.ring.isOpen || game.ring.hitsCaster(e.clientX, e.clientY))) game.ring.toggle(); });
     // Stop pinch zoom and double-tap zoom anywhere outside of menus.
     document.addEventListener('gesturestart', (e) => e.preventDefault());
     document.addEventListener('dblclick', (e) => { if (game.isPlaying()) e.preventDefault(); });
@@ -41,6 +46,7 @@ export class TouchInput {
     this.enabled = true;
     document.body.classList.add('touch');
     this.game.hud.touchMode = true;
+    this.game.inventory.touchMode = true;
     this.game.hud.renderMorse(this.game.morse);
     dispatchEvent(new Event('resize')); // the canvas fills the whole screen on touch devices
   }
@@ -60,7 +66,11 @@ export class TouchInput {
   onStart(e) {
     e.preventDefault();
     if (!this.game.isPlaying()) return;
+    const ring = this.game.ring;
     for (const t of e.changedTouches) {
+      // While the ring is open, a touch anywhere off the ring just closes it.
+      if (ring.isOpen) { ring.close(); continue; }
+      if (!this.casterTap && ring.hitsCaster(t.clientX, t.clientY)) { this.casterTap = { id: t.identifier, x: t.clientX, y: t.clientY }; continue; }
       if (t.clientX < innerWidth / 2) {
         if (!this.stick) { this.stick = { id: t.identifier, ox: t.clientX, oy: t.clientY }; this.drawStick(t.clientX, t.clientY); }
       } else if (!this.key) this.keyDown(t);
@@ -70,7 +80,14 @@ export class TouchInput {
   onMove(e) {
     e.preventDefault();
     for (const t of e.changedTouches) {
-      if (this.stick && t.identifier === this.stick.id) this.steer(t.clientX, t.clientY);
+      const c = this.casterTap;
+      if (c && t.identifier === c.id) {
+        // Dragging off the caster: it was not a tap, walk with it instead.
+        if (Math.hypot(t.clientX - c.x, t.clientY - c.y) < DEAD_ZONE) continue;
+        this.casterTap = null;
+        if (!this.stick) { this.stick = { id: t.identifier, ox: c.x, oy: c.y }; this.steer(t.clientX, t.clientY); }
+      }
+      else if (this.stick && t.identifier === this.stick.id) this.steer(t.clientX, t.clientY);
       else if (this.key && t.identifier === this.key.id) this.keyMove(t);
     }
   }
@@ -78,7 +95,8 @@ export class TouchInput {
   onEnd(e, cancelled) {
     e.preventDefault();
     for (const t of e.changedTouches) {
-      if (this.stick && t.identifier === this.stick.id) this.releaseStick();
+      if (this.casterTap && t.identifier === this.casterTap.id) { this.casterTap = null; if (!cancelled) this.game.ring.open(); }
+      else if (this.stick && t.identifier === this.stick.id) this.releaseStick();
       else if (this.key && t.identifier === this.key.id) this.keyUp(t, cancelled);
     }
   }
@@ -158,6 +176,7 @@ export class TouchInput {
 
   /** Let go of everything (menus opened, window lost focus). */
   releaseAll() {
+    this.casterTap = null;
     if (this.stick) this.releaseStick();
     if (this.key) { this.key = null; clearTimeout(this.dashTimer); this.game.audio.toneOff(); this.game.morse.cancelPress(); this.ripple.hidden = true; }
   }

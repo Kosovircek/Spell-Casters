@@ -17,6 +17,7 @@ export class Input {
 
   onKeyDown(e) {
     const g = this.game;
+    if (e.code === 'Escape' && g.ring?.isOpen) { g.ring.close(); e.preventDefault(); return; }
     if (e.code === 'Escape' && g.hud.visible && !g.inventory.isOpen) { this.toggleSettings(); e.preventDefault(); return; }
     if (!g.isPlaying()) return;
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS') { e.preventDefault(); g.network.save(); return; } // Ctrl+S saves, like Angband

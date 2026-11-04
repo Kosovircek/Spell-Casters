@@ -35,8 +35,11 @@ Hold the device sideways. The game goes full screen when you enter the dungeon (
 | Tap Morse | Anywhere on the **right half**: short tap = dot, long press = dash (same timing as Numpad 5; the phone buzzes lightly when a press becomes a dash) |
 | Cast | Swipe on the right half; the spell flies in the swipe direction, snapped to the 8 numpad directions |
 | Settings | The ⚙ button, bottom right. "Vibrate on touch Morse" turns the buzz off |
+| Items and spells | **Tap your own caster** (always in the middle of the screen) to open the ring menu around it. Segments: Pick up, Pack, Wield, Gear (equipment), Potions, Scrolls and Spells. A number shows how many you have; greyed-out segments have nothing to act on. Tap a segment, then tap an item in the menu. Tap anywhere else to close the ring |
 
-You can walk and tap Morse at the same time. There is no clear button on touch: a wrong letter is dropped automatically, and a misspelled spell still removes the letters before the mistake. Inventory menus still need a keyboard.
+You can walk and tap Morse at the same time, also while an item menu is open (menus sit on the right edge, so the joystick stays free). Dragging from your caster walks, so the middle of the screen is never dead. There is no clear button on touch: a wrong letter is dropped automatically, and a misspelled spell still removes the letters before the mistake.
+
+The menus are the same Angband-style ones as on the keyboard: every row is a button, ‹ goes back and ✕ closes. Pick an item in Pack to read, quaff, wear, drop, destroy or inspect it; pick one in Gear to take it off. Spells is a spellbook with the Morse for this floor's letters and a switch for the on-screen cheat sheet. With a mouse, clicking your caster opens the ring too.
 
 ## Rules
 
