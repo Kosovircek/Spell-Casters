@@ -120,6 +120,12 @@ export class Renderer {
   }
 
   // ------------------------------------------------------------------ drawing helpers for entities
+  tapHint(x, y, now) {
+    const c = this.ctx; c.globalAlpha = 0.25 + 0.1 * Math.sin(now / 400);
+    c.strokeStyle = '#ffd54f'; c.lineWidth = 1; c.setLineDash([2, 2]);
+    c.beginPath(); c.arc(x + 0.5, y + 0.5, 13, 0, 7); c.stroke();
+    c.setLineDash([]); c.globalAlpha = 1;
+  }
   shadow(x, y, r) { const c = this.ctx; c.fillStyle = 'rgba(0,0,0,0.4)'; c.beginPath(); c.ellipse(x, y, r, r / 2, 0, 0, 7); c.fill(); }
   orb(x, y, rx, ry) { this.ctx.beginPath(); this.ctx.ellipse(x, y, rx, ry, 0, 0, 7); }
   /** Draw a sprite centred on cx, mirrored when facing left. */
