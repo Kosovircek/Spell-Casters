@@ -132,7 +132,6 @@ export class Game {
       myId: this.myId,
       morse: this.morse,
       particles: this.particles,
-      touch: this.touch.enabled && !this.ring.isOpen,
       insight: !!meData?.equip?.head && meData.equip.head.kind === 'hat_insight', // Circlet of Insight
     });
     this.ring.place();
