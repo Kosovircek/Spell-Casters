@@ -38,10 +38,7 @@ export class Game {
     this.particles = new Particles();
     this.hud = new Hud();
     this.effects = new EventEffects({ audio: this.audio, particles: this.particles, renderer: this.renderer, getMyId: () => this.myId });
-    this.inventory = new InventoryMenu({
-      el: $('menu'), network: this.network, getMe: () => this.me, message: (t) => this.hud.message(t),
-      getPool: () => this.world.map?.pool, toggleCheatSheet: () => { this.hud.toggleCheatSheet(); return !$('cheat').hidden; },
-    });
+    this.inventory = new InventoryMenu({ el: $('menu'), network: this.network, getMe: () => this.me, message: (t) => this.hud.message(t) });
     this.bell = new BellChant({ audio: this.audio, settings: this.settings });
     this.input = new Input(this);
     this.ring = new RingMenu(this);
@@ -98,7 +95,7 @@ export class Game {
     if (!me || me.dead) return;
     const here = this.itemsHere();
     const key = here.map(f => f.id).join();
-    const how = this.touch.enabled ? 'tap your caster' : 'g';
+    const how = this.touch.enabled ? 'tap the left side' : 'g';
     if (key && key !== this.lastSeenItems) this.hud.message(here.length === 1 ? `You see ${here[0].name}. (${how} to pick up)` : `You see ${here.length} items here. (${how} to pick them up)`);
     this.lastSeenItems = key;
   }

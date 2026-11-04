@@ -3,8 +3,7 @@
 // I inspect, k destroy, g pick up, / switch list, Esc back/close.
 // Inside a list, pressing an item's letter opens a menu of what you can do with it.
 // On touch screens every row is a button: tapping it is the same as pressing its key.
-import { escapeHtml, prettyMorse } from './constants.js';
-import { MORSE } from './morse.js';
+import { escapeHtml } from './constants.js';
 
 export const SLOT_ORDER = ['weapon', 'ring', 'neck', 'head', 'body', 'cloak', 'feet'];
 export const SLOT_NAMES = { weapon: 'Staff', ring: 'Ring', neck: 'Amulet', head: 'Head', body: 'Body', cloak: 'Cloak', feet: 'Feet' };
@@ -29,16 +28,13 @@ const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
  *   { view, verb: 'quaff' ... }  a "Quaff which potion?" prompt
  *   { view, item: { ref, it } }  menu of what you can do with one item
  *   { inspect: it }              an item's description
- *   { spells: true }             the spellbook: Morse for this floor's letters
  */
 export class InventoryMenu {
-  constructor({ el, network, getMe, message, getPool, toggleCheatSheet }) {
+  constructor({ el, network, getMe, message }) {
     this.el = el;
     this.network = network;
     this.getMe = getMe;     // () => my player snapshot (pack, equip)
     this.message = message; // (text) => show on the message line
-    this.getPool = getPool; // () => letters used on this floor
-    this.toggleCheatSheet = toggleCheatSheet; // () => true when the on-screen cheat sheet is now shown
     this.touchMode = false; // set by the touch controls: show tap hints instead of key hints
     this.ui = null;
     // A tap on a row works like pressing that row's key.
@@ -48,7 +44,6 @@ export class InventoryMenu {
       e.stopPropagation();
       const k = b.dataset.k;
       if (k === 'close') this.close();
-      else if (k === 'cheat') { this.cheatOn = this.toggleCheatSheet(); this.render(); }
       else this.handleKey({ key: k });
     });
   }
@@ -76,7 +71,6 @@ export class InventoryMenu {
     this.render();
   }
   close() { this.ui = null; this.render(); }
-  openSpellbook() { this.ui = { spells: true }; this.render(); }
   run(verb, ref, it) {
     if (verb === 'inspect') { this.ui = { inspect: it }; return this.render(); }
     if (verb === 'takeoff') this.network.command('takeoff', { slot: ref.slot });
@@ -90,7 +84,7 @@ export class InventoryMenu {
     const k = e.key, ui = this.ui;
     if (!ui) return this.handleClosedKey(k);
     if (k === 'Escape') { if (ui.item) { this.ui = { view: ui.view, verb: ui.verb }; this.render(); } else this.close(); return true; }
-    if (ui.inspect || ui.spells) { this.close(); return true; }
+    if (ui.inspect) { this.close(); return true; }
     if (ui.item) {
       const v = KEY_TO_VERB[k];
       if (v && this.verbsFor(ui.item.ref, ui.item.it).includes(v)) this.run(v, ui.item.ref, ui.item.it);
@@ -125,7 +119,7 @@ export class InventoryMenu {
 
   // ------------------------------------------------------------------ drawing
   /** Re-render when new state arrives (counts change), but not over an item menu or description. */
-  refresh() { if (this.ui && !this.ui.inspect && !this.ui.item && !this.ui.spells) this.render(); }
+  refresh() { if (this.ui && !this.ui.inspect && !this.ui.item) this.render(); }
 
   render() {
     const el = this.el, ui = this.ui;
@@ -133,7 +127,6 @@ export class InventoryMenu {
     el.hidden = false;
     if (ui.inspect) return this.renderInspect(ui.inspect);
     if (ui.item) return this.renderItemMenu(ui.item);
-    if (ui.spells) return this.renderSpellbook();
     const me = this.getMe();
     const title = ui.verb ? VERBS[ui.verb].prompt : ui.view === 'pack' ? `Inventory (${me ? me.pack.length : 0}/12)` : 'Equipment';
     const rows = this.entries(ui.view).map(e => {
@@ -165,16 +158,6 @@ export class InventoryMenu {
     const body = `<p>${escapeHtml(it.desc)}</p>`;
     if (this.touchMode) { this.setHtml(this.touchHead(escapeHtml(cap(it.name)), false) + body + `<div class="row" data-k="close">OK</div>`); return; }
     this.setHtml(`<div class="mh">${escapeHtml(cap(it.name))}</div>${body}<p class="dim">${how}</p><div class="mf">(press any key)</div>`);
-  }
-  /** Spells are cast by tapping Morse, so the spellbook is a reference: each letter of this floor and its code. */
-  renderSpellbook() {
-    const pool = [...(this.getPool() || '')]; // a string or array of letters
-    const cells = pool.map(k => `<div class="sp"><b>${k}</b> ${prettyMorse(MORSE[k])}</div>`).join('');
-    this.setHtml((this.touchMode ? this.touchHead('Spellbook', false) : '<div class="mh">Spellbook</div>') +
-      `<p class="dim">Letters on this floor. Tap dots and dashes on the right, then swipe to cast.</p>` +
-      `<div class="spells">${cells}</div>` +
-      `<div class="row" data-k="cheat">Cheat sheet on screen: ${this.cheatOn === false ? 'off' : 'on'}</div>` +
-      (this.touchMode ? '' : '<div class="mf">ESC to close</div>'));
   }
   /** Only touch the DOM when the menu really changed, so a row is never swapped out under a finger. */
   setHtml(html) { if (html !== this.lastHtml) { this.el.innerHTML = html; this.lastHtml = html; } }
