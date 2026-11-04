@@ -49,7 +49,17 @@ The menus are the same Angband-style ones as on the keyboard: every row is a but
 - Enemies throw red letter spells. A spell whose first letter matches cancels it in mid-air and keeps flying with its remaining letters. You can also dodge.
 - Aiming is forgiving: a spell picks the best matching target within about 70 degrees of the direction you chose and flies a path to it, curving around walls and corners (up to about 26 tiles of path).
 - Clear the floor, including its boss, then step on the glowing stairs. Floor 1 uses only the easiest letters (E T A N I M); each floor adds more letters and longer words.
-- When you go down you come back next to a teammate after 10 seconds. If the whole party is down the floor restarts.
+- When you go down you come back next to a teammate after 10 seconds, at half HP. If the whole party is down the floor restarts and everyone is back at half HP.
+
+## Levels, HP and damage
+
+- You have **HP** instead of hearts: 20 at level 1, +6 per level, plus gear. HP is **not** refilled when you go down the stairs.
+- Natural regeneration is tiny: 1 HP every 10 seconds, and only after nothing has hit you for 10 seconds. Potions of Healing restore 30% of your max HP.
+- **XP** goes only to the caster whose spell finishes a word. A word is worth the sum of its letters (E T A N I M = 1, S O U R D K = 2, G W H L F = 3, the rest = 4) times the enemy type: slime ×1, skeleton mage ×1.5, Bellwraith ×5 (per name), chest ×0.5.
+- Level L to L+1 needs `10 × L^1.5` XP (10, 28, 52, 80 ...). Max level 30. A level up adds the new max HP to your current HP, but does not heal you fully.
+- Each enemy letter that hits you deals damage: slime 4, mage 6, Bellwraith 8 on floor 1, +25% per floor, ±25% random. **Armor** lets `100 / (100 + Armor)` of it through (25 armor blocks 20%, 100 blocks 50%).
+- Stats grow on their own: max HP +6 per level, speed +1% per level, Luck +1 every 5 levels. Press **C** for the character sheet.
+- Killing still works only by spelling. Weapons add no damage: each one has a special effect instead.
 
 ## The Bellwraith (boss)
 
@@ -76,31 +86,70 @@ Every floor has 2 to 4 chests with a gold word above them; one is always in the 
 | `t` | Take off equipment |
 | `I` | Inspect an item |
 | `k` | Destroy an item |
+| `C` | Character sheet: level, XP, HP, armor, speed, luck and what your gear adds |
 | `w` / `d` | Wear/wield and drop. Use them from inside the inventory, because W and D also walk |
 | `/` | Switch between inventory and equipment |
 | Esc | Back / close |
 
 Numpad Morse and aiming keep working while a menu is open. The game does not pause.
 
-**Potions** (quaff): Healing (+2 hearts), Speed (+50% run speed for 30s), Warding (absorbs the next 2 hits).
-**Scrolls** (read): Slow Time (enemy spells at 40% speed for 15s), Teleportation (random room), Resurrection (revives downed teammates, heals the party 1 heart).
+**Potions** (quaff): Healing (30% of max HP), Speed (+50% run speed for 30s), Warding (absorbs the next 2 hits).
+**Scrolls** (read): Slow Time (enemy spells at 40% speed for 15s), Teleportation (random room), Resurrection (revives downed teammates at half HP, heals the party 20%).
 
-| Slot | Item | Effect |
-| --- | --- | --- |
-| Staff | Staff of Forking | Every third spell splits into three |
-| Staff | Staff of Haste | Spells fly 40% faster |
-| Ring | Ring of Reflection | 25% chance an enemy spell glances off |
-| Amulet | Amulet of Regeneration | +1 heart every 20s |
-| Head | Circlet of Insight | Shows the Morse code of the next letter above enemies and chests |
-| Body | Robe of Vitality | +2 max hearts |
-| Cloak | Cloak of X-Warding | Auto-casts an X counter-spell at incoming X letters |
-| Feet | Boots of Swiftness | Walk 25% faster |
+Every piece of gear needs a minimum level. You can carry gear above your level; it shows "(needs Lv N)" in red until you get there. There are eight slots: weapon, shield, ring, amulet, head, body, cloak, feet.
 
-Items stay with you between floors and when you go down. For testing, `FORCE_ITEM=cloak_ward npm start` makes every chest drop that item (ids are in `server/items.js`).
+- **Common** gear is a material plus a base item: Bronze (level 1), Iron (5), Steel (10), Orichalcum (18), Adamant (25). Helms, mail, cloaks, boots and shields give Armor, rings give Luck, amulets give HP.
+- **Weapons** each have one small effect that grows with the material: Wand (spells fly 10-50% faster), Spear (spells reach 10-50% farther), Rod (a correct hit staggers the enemy 0.3-1.2 s), Staff (finishing a word heals 1-5 HP), Blade (5-20% chance a correct letter also removes the next one).
+- **Shields** block letters completely: a common shield blocks 1-3 random letters of the floor it was found on.
+- **Enchanted** gear has one bonus: of Swiftness, Vitality, Protection or Fortune.
+- **Mythic** gear (gold names) comes from Greek, Norse, Chinese and Japanese myth, has a special effect, and drops at most once per saved game. Three are cursed (red names).
+
+| Slot | Mythic item | Level | Effect |
+| --- | --- | --- | --- |
+| Weapon | Caduceus of Hermes | 3 | Spells fly 40% faster, +5% speed |
+| Weapon | Trident of Poseidon | 8 | Every third spell splits into three |
+| Weapon | Bow of Artemis | 12 | Spells home in any direction and reach 50% farther |
+| Weapon | Ruyi Jingu Bang | 14 | Spells hold 12 letters |
+| Weapon | Gungnir | 16 | Leftover letters fly on to the next enemy |
+| Weapon | Mjolnir | 18 | 1 s stagger; finishing a word stuns enemies within 3 tiles |
+| Weapon | Thunderbolt of Zeus | 22 | Finishing a word chains lightning to the nearest enemy |
+| Weapon | Kusanagi-no-Tsurugi | 24 | Spells cut every enemy letter they fly through |
+| Weapon | Laevateinn | 26 | Correct hits burn away one more letter 2 s later |
+| Weapon | Green Dragon Crescent Blade | 28 | One spell hits up to three enemies |
+| Shield | Shield of Ajax | 8 | Armor 20, blocks 2 random letters |
+| Shield | Tengu Feather Fan | 12 | Blocks T M O (dash-only letters) |
+| Shield | Svalinn | 14 | Blocks every vowel |
+| Shield | Shell of Xuanwu | 16 | Blocks E I S H (dot-only letters) |
+| Shield | Shield of Achilles | 24 | Blocks E T A N I M |
+| Head | Eye of Odin | 1 | Shows the Morse of the next letter (can drop again) |
+| Head | Golden Headband of Sun Wukong | 6 | Spells 50% faster and 10 letters. Cursed: +20% damage taken, stuck until the next floor |
+| Head | Kabuto of Hachiman | 10 | Armor 15, +10% HP |
+| Head | Helm of Hades | 15 | Enemies more than 5 tiles away can't see you |
+| Body | Golden Fleece | 8 | Heals 1 HP every 3 s after 5 s without a hit |
+| Body | Nemean Lion Pelt | 12 | Armor 40, the first hit every 10 s does nothing |
+| Body | Robe of the Jade Emperor | 16 | Armor 20, +40 HP |
+| Body | Aegis of Athena | 22 | Armor 50, enemies that hit you turn to stone for 2 s |
+| Cloak | Mantle of the Norns (X) | 4 | Auto-casts an X counter-spell at incoming X letters |
+| Cloak | Hagoromo | 10 | 30% less damage while standing still |
+| Cloak | Freyja's Falcon Cloak | 18 | +15% speed, 30% less damage while moving |
+| Feet | Talaria | 10 | +30% speed, spells 20% faster |
+| Feet | Horseshoes of Sleipnir | 20 | +40% speed, enemy letters crossing your trail slow down |
+| Ring | Andvaranaut | 5 | +5 Luck. Cursed: -15% HP |
+| Ring | Draupnir | 10 | Every ninth kill drops a Potion of Healing |
+| Ring | Yata no Kagami | 12 | 25% of enemy letters glance off |
+| Ring | Ring of Gyges | 16 | Invisible for 2 s after a hit |
+| Amulet | Necklace of Harmonia | 5 | 10-letter spells, +3 Luck. Cursed: -20% HP |
+| Amulet | Magatama of Yasakani | 8 | +15 HP, finishing a word heals 2 HP |
+| Amulet | Brisingamen | 12 | +25 HP, regenerates 2% of max HP every 5 s |
+| Amulet | Pearl of the Dragon King | 24 | Once per floor, a killing hit leaves you at 1 HP |
+
+A plain Circlet of Insight (level 1) also drops: it shows the Morse code of the next letter above enemies and chests.
+
+Items stay with you between floors and when you go down. For testing, `FORCE_ITEM=m_svalinn npm start` makes every chest drop that item (ids are in `server/items.js`; common gear takes a material index, e.g. `FORCE_ITEM=c_helm:2` for a Steel Helm).
 
 ## Saving lobbies
 
-A lobby (room) is saved on the server as `saves/<room>.json`: the floor, the map, the enemies left, the chests and items on the floor, and every player's hearts, gear, pack and position.
+A lobby (room) is saved on the server as `saves/<room>.json`: the floor, the map, the enemies left, the chests and items on the floor, and every player's level, XP, HP, gear, pack and position. Saves from before levelling still load: those casters start at level 1, their old items turn into the closest new ones, and gear above their level goes into the pack.
 
 - It saves every 30 seconds, on every new floor, whenever someone leaves, when anyone presses **Ctrl+S**, and when you stop the server with Ctrl+C.
 - To carry on, open the game, click the saved lobby on the start screen (or type its room name) and enter **the same name as before**. Your gear comes back; a new name starts with an empty pack.
@@ -128,7 +177,8 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `Dungeon.js` | Map generation plus collision, line of sight and path finding |
 | `ItemCommands.js` | Angband item commands: quaff, read, wield, take off, drop, destroy, pick up |
 | `SaveStore.js` | Reads and writes lobby saves in `saves/`; entities, `Dungeon` and `Room` each have `toSave()` / `fromSave()` |
-| `items.js` | Item definitions, names, pack stacking |
+| `items.js` | Item definitions (materials, bases, enchantments, mythic items), names, loot rolls, pack stacking |
+| `progression.js` | XP values, the level curve, enemy damage and armor |
 | `words.js` | Letters and words per floor |
 | `config.js` | All tunable numbers (speeds, ranges, timings) |
 | `util.js` | Random helpers |
@@ -146,7 +196,7 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `input.js` | `Input`: keyboard handling for Morse, aiming, walking, menus |
 | `morse.js` | `MorseKey`: dot/dash timing and decoding |
 | `hud.js` | `Hud`: party panel, Morse box, banner, cheat sheet, message line |
-| `inventory.js` | `InventoryMenu`: the Angband-style inventory and equipment popup |
+| `inventory.js` | `InventoryMenu`: the Angband-style inventory, equipment and character sheet popup |
 | `bell.js` | `BellChant`: plays the Bellwraith's bell letter in Morse (flashes and tone) |
 | `effects.js` | `EventEffects`: turns server events into sounds and particles |
 | `particles.js` | `Particles`: sparks and floating text |

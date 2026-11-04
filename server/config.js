@@ -8,7 +8,6 @@ export const MAX_PLAYERS = 4;
 export const PLAYER = {
   speed: 3.6,          // tiles per second
   radius: 0.3,
-  hp: 5,
   respawnSeconds: 10,
   colors: ['#4fc3f7', '#ff8a65', '#aed581', '#ce93d8'],
 };
@@ -28,4 +27,14 @@ export const EFFECTS = {
   slowSeconds: 15,      // Scroll of Slow Time
   cloakRange: 4,        // tiles at which a cloak counters an incoming letter
   regenSeconds: 20,     // Amulet of Regeneration
+};
+
+export const LEVELS = {
+  max: 30,
+  baseHp: 20,           // max HP at level 1
+  hpPerLevel: 6,
+  speedPerLevel: 0.01,  // +1% walking speed per level
+  regenDelay: 10,       // natural regen starts after this many seconds without being hit
+  regenEvery: 10,       // ...then 1 HP every this many seconds
+  reviveShare: 0.5,     // downed casters and party wipes come back at 50% HP
 };

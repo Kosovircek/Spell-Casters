@@ -4,6 +4,7 @@ import { rnd, pick } from './util.js';
 import { letterPool, wordsFor } from './words.js';
 import { Dungeon } from './Dungeon.js';
 import { Player, Enemy, Slime, Mage, Boss, Chest, PlayerSpell, FloorItem } from './entities.js';
+import { xpFor } from './progression.js';
 import { ItemCommands } from './ItemCommands.js';
 import * as Items from './items.js';
 
@@ -18,6 +19,7 @@ export class Room {
     this.players = new Map(); // id -> Player
     this.savedPlayers = {};   // lowercase name -> saved progress of players who are not here right now
     this.floor = 1;
+    this.foundMythics = new Set(); // mythic items drop at most once per game (like Angband artifacts)
     this.events = [];         // effects for clients (hits, blocks...), flushed every tick
     this.banner = null;       // { text, until } big centred message
     this.itemCommands = new ItemCommands(this);
@@ -33,7 +35,8 @@ export class Room {
     const players = { ...this.savedPlayers };
     for (const pl of this.players.values()) players[pl.name.toLowerCase()] = pl.toSave();
     return {
-      version: 1, room: this.code, savedAt: Date.now(), floor: this.floor, stairsOpen: this.stairsOpen,
+      version: 2, room: this.code, savedAt: Date.now(), floor: this.floor, stairsOpen: this.stairsOpen,
+      foundMythics: [...this.foundMythics],
       dungeon: this.dungeon.toSave(),
       enemies: this.enemies.map(e => e.toSave()),
       chests: this.chests.map(c => c.toSave()),
@@ -48,6 +51,7 @@ export class Room {
   }
   restore(s) {
     this.floor = s.floor;
+    this.foundMythics = new Set(s.foundMythics || []);
     this.dungeon = new Dungeon(s.dungeon);
     this.enemies = s.enemies.map(e => Enemy.fromSave(e));
     this.chests = s.chests.map(c => Chest.fromSave(c));
@@ -147,7 +151,7 @@ export class Room {
     pl.placeAt(this);
     if (buddy) { pl.x = buddy.x; pl.y = buddy.y; }
     const saved = this.savedPlayers[pl.name.toLowerCase()];
-    if (saved) { // a returning player gets their gear, hearts and position back
+    if (saved) { // a returning player gets their level, gear, HP and position back
       pl.restore(saved);
       if (!Number.isFinite(saved.x) || this.dungeon.blocked(pl.x, pl.y, pl.radius)) { pl.placeAt(this); pl.restore({ ...saved, x: pl.x, y: pl.y }); }
       delete this.savedPlayers[pl.name.toLowerCase()];
@@ -175,14 +179,22 @@ export class Room {
 
   // ------------------------------------------------------------------ casting
   cast(pl, word, dx, dy) {
-    if (pl.dead || typeof word !== 'string' || !new RegExp(`^[A-Z]{1,${SPELL.maxLetters}}$`).test(word)) return;
+    if (pl.dead || typeof word !== 'string' || !new RegExp(`^[A-Z]{1,${pl.maxLetters}}$`).test(word)) return;
     const len = Math.hypot(dx, dy); if (!len || !isFinite(len)) return;
     dx /= len; dy /= len;
     pl.casts++;
-    if (pl.wears('staff_fork') && pl.casts % 3 === 0) { // Staff of Forking: three spells, 35 degrees apart
-      const taken = new Set();
+    const taken = new Set();
+    if (pl.has('fork') && pl.casts % 3 === 0) { // Trident of Poseidon: three spells, 35 degrees apart
       for (const a of [0, -0.61, 0.61]) this.launch(pl, word, dx * Math.cos(a) - dy * Math.sin(a), dx * Math.sin(a) + dy * Math.cos(a), taken);
-    } else this.launch(pl, word, dx, dy, new Set());
+    } else this.launch(pl, word, dx, dy, taken);
+    if (pl.has('sweep')) { // Green Dragon Crescent Blade: up to two more enemies whose words start the same way
+      for (let k = 0; k < 2; k++) {
+        const t = this.chooseTarget(pl, word[0], dx, dy, taken, { any: true, kinds: ['enemy'] });
+        if (!t) break;
+        const o = this.findTarget(t), d = Math.hypot(o.x - pl.x, o.y - pl.y) || 1;
+        this.launch(pl, word, (o.x - pl.x) / d, (o.y - pl.y) / d, taken, t);
+      }
+    }
     this.emit({ t: 'cast', x: pl.x, y: pl.y, c: pl.color });
   }
 
@@ -197,18 +209,22 @@ export class Room {
    * Soft aim: pick the best thing this letter can hit inside a cone around the chosen direction,
    * as long as there is a way to fly there around walls. Enemy letters first, chests last.
    */
-  chooseTarget(pl, letter, dx, dy, taken) {
-    const dg = this.dungeon;
+  chooseTarget(pl, letter, dx, dy, taken, opts = {}) {
+    const dg = this.dungeon, from = opts.from || pl;
+    const range = SPELL.homingRange * pl.reach, maxPath = Math.round(SPELL.homingPath * pl.reach);
+    const cone = opts.any || pl.has('anyAim') ? -1.01 : SPELL.homingCone; // Bow of Artemis: any direction
+    const kinds = opts.kinds || ['proj', 'enemy', 'chest'];
     let best = null, bestScore = Infinity;
     const consider = (kind, o) => {
-      const vx = o.x - pl.x, vy = o.y - pl.y, d = Math.hypot(vx, vy);
-      if (d > SPELL.homingRange || d < 0.01 || taken.has(o.id)) return;
+      if (!kinds.includes(kind) || o === opts.skip) return;
+      const vx = o.x - from.x, vy = o.y - from.y, d = Math.hypot(vx, vy);
+      if (d > range || d < 0.01 || taken.has(o.id)) return;
       const cos = (vx * dx + vy * dy) / d;
-      if (cos < SPELL.homingCone) return;
-      const path = dg.los(pl.x, pl.y, o.x, o.y) ? null : dg.findPath(pl.x, pl.y, o.x, o.y, SPELL.homingPath);
+      if (cos < cone) return;
+      const path = dg.los(from.x, from.y, o.x, o.y) ? null : dg.findPath(from.x, from.y, o.x, o.y, maxPath);
       if (path === undefined) return; // no way around the walls
       const travel = path ? path.length : d;
-      const score = travel * (2 - cos) * (kind === 'proj' ? 0.7 : kind === 'chest' ? 1.3 : 1);
+      const score = travel * (2 - Math.max(cos, 0)) * (kind === 'proj' ? 0.7 : kind === 'chest' ? 1.3 : 1);
       if (score < bestScore) { bestScore = score; best = { kind, id: o.id }; }
     };
     for (const s of this.spells) if (!s.fromPlayer && s.letters === letter) consider('proj', s);
@@ -226,16 +242,23 @@ export class Room {
   /** A chest spills its loot on the floor, Angband-style, for anyone to pick up with g. */
   openChest(chest, pl) {
     chest.open = true;
-    const count = Math.random() < 0.15 + this.floor * 0.05 ? 2 : 1;
-    for (let k = 0; k < count; k++) this.dropItem(Items.makeItem(Items.rollKind(), this.pool), chest.x + (k ? 0.6 : 0), chest.y + 0.6);
+    const count = Math.random() < 0.15 + this.floor * 0.05 + pl.luck * 0.02 ? 2 : 1;
+    for (let k = 0; k < count; k++) this.dropItem(this.rollLoot(pl), chest.x + (k ? 0.6 : 0), chest.y + 0.6);
+    pl.gainXp(this, xpFor(chest.lock.word, 'chest'));
     this.emit({ t: 'chest', x: chest.x, y: chest.y, by: pl.id });
     this.say(`${pl.name} opened a chest!`, 2);
   }
   /** The Bellwraith drops three items. */
   bossDefeated(boss, pl) {
-    for (let k = 0; k < 3; k++) this.dropItem(Items.makeItem(Items.rollKind(), this.pool), boss.x + (k - 1) * 0.7, boss.y + 0.4);
+    for (let k = 0; k < 3; k++) this.dropItem(this.rollLoot(pl), boss.x + (k - 1) * 0.7, boss.y + 0.4);
     this.emit({ t: 'bossdown', x: boss.x, y: boss.y });
     this.say(`${pl.name} silenced the Bellwraith!`, 3);
+  }
+  /** One random item for this floor; the finder's Luck helps. */
+  rollLoot(pl) {
+    const it = Items.rollItem(this.floor, this.pool, pl ? pl.luck : 0, this.foundMythics);
+    if (Items.MYTHIC[it.kind]) this.foundMythics.add(it.kind);
+    return it;
   }
   dropItem(item, x, y) {
     const dg = this.dungeon;
@@ -266,11 +289,11 @@ export class Room {
     this.broadcastState(now);
   }
 
-  /** Cloak of X-Warding: automatically counter incoming X letters heading toward the wearer. */
+  /** Mantle of the Norns (X): automatically counter incoming X letters heading toward the wearer. */
   fireCloaks(alive) {
     for (const pl of alive) {
       const cloak = pl.equip.cloak;
-      if (!cloak || cloak.kind !== 'cloak_ward') continue;
+      if (!cloak || !pl.has('counter') || !cloak.letter) continue;
       for (const s of this.spells) {
         if (s.fromPlayer || s.countered || s.letters !== cloak.letter) continue;
         const dx = pl.x - s.x, dy = pl.y - s.y, d = Math.hypot(dx, dy);
@@ -288,9 +311,16 @@ export class Room {
     const enemySpells = () => this.spells.filter(s => !s.fromPlayer && live(s));
 
     // Player spell vs enemy letter: the spell's first letter cancels a matching letter, the rest keeps flying.
+    // Kusanagi cuts through every enemy letter without spending any of its own.
     for (const a of playerSpells()) {
       for (const b of enemySpells()) {
-        if (b.letters !== a.letters[0] || a.distanceTo(b) >= 0.6) continue;
+        if (a.distanceTo(b) >= 0.6) continue;
+        if (a.owner.has('cut') && b.letters !== a.letters[0]) {
+          b.removed = true; a.owner.blocks++;
+          this.emit({ t: 'block', x: b.x, y: b.y, l: b.letters, cut: true });
+          continue;
+        }
+        if (b.letters !== a.letters[0]) continue;
         b.removed = true;
         a.letters = a.letters.slice(1); a.target = null;
         if (!a.letters) a.removed = true;
@@ -304,12 +334,9 @@ export class Room {
       const e = this.enemies.find(e => !e.removed && s.distanceTo(e) <= e.hitRadius);
       if (!e) continue;
       s.removed = true;
+      const word = e.lock.word;
       const result = e.hitBy(this, s);
-      if (result === 'done') {
-        e.removed = true; s.owner.kills++;
-        this.emit({ t: 'kill', x: e.x, y: e.y, type: e.type });
-        if (e.isBoss) this.bossDefeated(e, s.owner);
-      } else if (result === 'hit' || result === 'wrong') this.emit({ t: result, x: e.x, y: e.y });
+      this.afterEnemyHit(e, result, s.owner, word, now, s);
     }
     for (const s of playerSpells()) {
       const c = this.chests.find(c => !c.open && s.distanceTo(c) <= 0.55);
@@ -321,11 +348,68 @@ export class Room {
     }
     // Enemy letter vs player.
     for (const s of enemySpells()) {
+      if (!s.slowed && alive.some(p => p.trail.some(t => Math.hypot(t.x - s.x, t.y - s.y) < 0.7))) s.slowed = true; // Sleipnir
       const pl = alive.find(p => !p.dead && s.distanceTo(p) <= 0.45);
       if (!pl) continue;
       s.removed = true;
-      pl.takeHit(this, now);
+      pl.takeHit(this, now, s);
     }
+  }
+
+  /**
+   * What happens after a spell (or a chip from an item effect) hits an enemy.
+   * word = the enemy's word before the hit (the Bellwraith moves on to a new name when one is finished).
+   * spell = the player spell, or null for chips (chips never trigger other effects, so nothing loops).
+   */
+  afterEnemyHit(e, result, pl, word, now, spell = null) {
+    const correct = result === 'hit' || result === 'done' || result === 'phase';
+    if (result === 'hit' || result === 'wrong') this.emit({ t: result, x: e.x, y: e.y });
+    if (!correct) return;
+    if (spell) {
+      if (pl.stats.stagger && result === 'hit') e.stun(now, pl.stats.stagger * 1000, this, 'stagger');
+      if (result === 'hit' && pl.has('burn') && !e.burnAt) { e.burnAt = now + 2000; e.burnBy = pl; }
+      if (result === 'hit' && pl.stats.echo && Math.random() < pl.stats.echo) this.chip(e, pl, 'echo');
+    }
+    if (result === 'hit' || e.removed) return;
+    // A whole word was spelled: XP for whoever finished it, and word effects.
+    pl.gainXp(this, xpFor(word, e.type));
+    if (pl.stats.wordHeal) { const got = pl.heal(pl.stats.wordHeal); if (got) this.emit({ t: 'regen', x: pl.x, y: pl.y, n: got }); }
+    if (spell) {
+      if (pl.has('thunderclap')) {
+        this.emit({ t: 'thunder', x: e.x, y: e.y });
+        for (const o of this.enemies) if (o !== e && !o.removed && o.distanceTo(e) <= 3) o.stun(now, 2000, this, 'thunder');
+      }
+      if (pl.has('chain')) {
+        const near = this.enemies.filter(o => o !== e && !o.removed && o.distanceTo(e) <= 6 && this.dungeon.los(e.x, e.y, o.x, o.y))
+          .sort((a, b) => a.distanceTo(e) - b.distanceTo(e))[0];
+        if (near) { this.emit({ t: 'chain', x: e.x, y: e.y, x2: near.x, y2: near.y }); this.chip(near, pl, 'chain'); }
+      }
+      const left = !e.isBoss ? spell.letters.slice(e.lock.used) : '';
+      if (left && pl.has('pierce')) { // Gungnir: the rest of the spell flies on
+        const t = this.chooseTarget(pl, left[0], 1, 0, new Set([e.id]), { any: true, from: e, kinds: ['enemy', 'chest'], skip: e });
+        if (t) {
+          const o = this.findTarget(t), d = Math.hypot(o.x - e.x, o.y - e.y) || 1;
+          this.spells.push(new PlayerSpell(pl, left, (o.x - e.x) / d, (o.y - e.y) / d, t, e));
+        }
+      }
+    }
+    if (result !== 'done') return;
+    e.removed = true; pl.kills++;
+    this.emit({ t: 'kill', x: e.x, y: e.y, type: e.type });
+    if (e.isBoss) this.bossDefeated(e, pl);
+    if (pl.has('draupnir') && ++pl.draupnir % 9 === 0) {
+      this.dropItem(Items.makeItem('pot_heal'), e.x, e.y);
+      pl.tell('Draupnir drips a Potion of Healing.');
+    }
+  }
+
+  /** An item effect removes the next letter of an enemy's word (Laevateinn, Zeus, blades). */
+  chip(e, pl, why) {
+    if (!e || e.removed || !pl || (e.isBoss && e.shield)) return;
+    const word = e.lock.word;
+    this.emit({ t: 'chip', x: e.x, y: e.y, l: e.lock.next, why });
+    const result = e.hitBy(this, { letters: e.lock.next, owner: pl });
+    this.afterEnemyHit(e, result, pl, word, Date.now(), null);
   }
 
   /** Open the stairs, go down a floor, or restart after a wipe. Returns true if a floor was loaded. */

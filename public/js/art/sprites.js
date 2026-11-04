@@ -114,17 +114,20 @@ const ITEM_ART = {
   head: ['...KKK...', '..KcccK..', '.KcycccK.', 'KKKKKKKKK'],
   feet: ['.KKK....', '.KcK....', '.KcK....', '.KccKK..', '.KccccK.', '.KKKKKK.'],
   weapon: ['.....KG', '....KWK', '...KWK.', '..KWK..', '.KWK...', 'KWK....', 'KK.....'],
+  shield: ['KKKKKKK', 'KcccccK', 'KcWcccK', 'KcccccK', '.KcccK.', '..KcK..', '...K...'],
 };
 const ITEM_COLORS = {
   pot_heal: '#ef5350', pot_speed: '#4fc3f7', pot_ward: '#80deea',
   cloak_ward: '#7e57c2', robe_vit: '#c62828', hat_insight: '#ffd54f', boots_speed: '#8d6e63',
   ring_reflect: '#e0e0e0', amulet_regen: '#e91e63', staff_fork: '#aed581', staff_haste: '#4fc3f7',
+  circlet: '#fff59d',
 };
-export function itemSprite(kind, type, slot) {
-  const key = 'item' + kind;
+/** color: the server's colour for the item (its material, or gold for mythic gear). */
+export function itemSprite(kind, type, slot, color = null) {
+  const key = 'item' + kind + type + slot + color;
   if (!spriteCache[key]) {
     const art = type === 'potion' ? ITEM_ART.potion : type === 'scroll' ? ITEM_ART.scroll : ITEM_ART[slot] || ITEM_ART.cloak;
-    const c = ITEM_COLORS[kind] || '#ffd54f';
+    const c = color || ITEM_COLORS[kind] || '#ffd54f';
     spriteCache[key] = sprite(art, { K: '#0b0910', c, w: '#e0e0e0', W: '#ffffff', p: '#e8d9b0', P: '#8d6e63', y: '#ffd54f', G: c });
   }
   return spriteCache[key];

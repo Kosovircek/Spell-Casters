@@ -1,12 +1,12 @@
 // Angband-style inventory / equipment popup.
 // Keys: i inventory, e equipment, w wear/wield, t take off, d drop, q quaff, r read,
-// I inspect, k destroy, g pick up, / switch list, Esc back/close.
+// I inspect, k destroy, g pick up, C character sheet, / switch list, Esc back/close.
 // Inside a list, pressing an item's letter opens a menu of what you can do with it.
 // On touch screens every row is a button: tapping it is the same as pressing its key.
 import { escapeHtml } from './constants.js';
 
-export const SLOT_ORDER = ['weapon', 'ring', 'neck', 'head', 'body', 'cloak', 'feet'];
-export const SLOT_NAMES = { weapon: 'Staff', ring: 'Ring', neck: 'Amulet', head: 'Head', body: 'Body', cloak: 'Cloak', feet: 'Feet' };
+export const SLOT_ORDER = ['weapon', 'shield', 'ring', 'neck', 'head', 'body', 'cloak', 'feet'];
+export const SLOT_NAMES = { weapon: 'Weapon', shield: 'Shield', ring: 'Ring', neck: 'Amulet', head: 'Head', body: 'Body', cloak: 'Cloak', feet: 'Feet' };
 
 const VERBS = {
   quaff:   { key: 'q', label: 'Quaff', prompt: 'Quaff which potion?', from: 'pack', ok: it => it.type === 'potion', none: 'You have no potions to quaff.' },
@@ -28,6 +28,7 @@ const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
  *   { view, verb: 'quaff' ... }  a "Quaff which potion?" prompt
  *   { view, item: { ref, it } }  menu of what you can do with one item
  *   { inspect: it }              an item's description
+ *   { sheet: true }              the character sheet (level, HP, armor, ...)
  */
 export class InventoryMenu {
   constructor({ el, network, getMe, message }) {
@@ -71,6 +72,7 @@ export class InventoryMenu {
     this.render();
   }
   close() { this.ui = null; this.render(); }
+  openSheet() { this.ui = { sheet: true }; this.render(); }
   run(verb, ref, it) {
     if (verb === 'inspect') { this.ui = { inspect: it }; return this.render(); }
     if (verb === 'takeoff') this.network.command('takeoff', { slot: ref.slot });
@@ -85,6 +87,8 @@ export class InventoryMenu {
     if (!ui) return this.handleClosedKey(k);
     if (k === 'Escape') { if (ui.item) { this.ui = { view: ui.view, verb: ui.verb }; this.render(); } else this.close(); return true; }
     if (ui.inspect) { this.close(); return true; }
+    if (ui.sheet) { if (k === 'C') return true; if (k === 'i' || k === 'e') this.open(k === 'i' ? 'pack' : 'equip'); else this.close(); return true; }
+    if (k === 'C') { this.openSheet(); return true; }
     if (ui.item) {
       const v = KEY_TO_VERB[k];
       if (v && this.verbsFor(ui.item.ref, ui.item.it).includes(v)) this.run(v, ui.item.ref, ui.item.it);
@@ -111,6 +115,7 @@ export class InventoryMenu {
   /** Shortcut keys while no menu is open. W, A, S, D walk, so wear and drop live inside the inventory. */
   handleClosedKey(k) {
     if (k === 'i') { this.open('pack'); return true; }
+    if (k === 'C') { this.openSheet(); return true; }
     if (k === 'e') { this.open('equip'); return true; }
     if (k === 'g') { this.network.command('pickup'); return true; }
     if (['q', 'r', 't', 'I', 'k'].includes(k)) { const v = KEY_TO_VERB[k]; this.open(v === 'takeoff' ? 'equip' : 'pack', v); return true; }
@@ -121,31 +126,41 @@ export class InventoryMenu {
   /** Re-render when new state arrives (counts change), but not over an item menu or description. */
   refresh() { if (this.ui && !this.ui.inspect && !this.ui.item) this.render(); }
 
+  /** An item's name, coloured by rarity, with its level when you are too low for it. */
+  itemLabel(it) {
+    const me = this.getMe();
+    const cls = it.rarity === 'mythic' ? (/cursed/i.test(it.desc) ? 'cursed' : 'myth') : it.rarity === 'enchanted' ? 'ench' : '';
+    const name = cls ? `<span class="${cls}">${escapeHtml(it.name)}</span>` : escapeHtml(it.name);
+    const need = it.lvl && me && me.lv < it.lvl ? ` <span class="need">(needs Lv ${it.lvl})</span>` : '';
+    return name + need;
+  }
+
   render() {
     const el = this.el, ui = this.ui;
     if (!ui) { el.hidden = true; this.setHtml(''); return; }
     el.hidden = false;
     if (ui.inspect) return this.renderInspect(ui.inspect);
+    if (ui.sheet) return this.renderSheet();
     if (ui.item) return this.renderItemMenu(ui.item);
     const me = this.getMe();
     const title = ui.verb ? VERBS[ui.verb].prompt : ui.view === 'pack' ? `Inventory (${me ? me.pack.length : 0}/12)` : 'Equipment';
     const rows = this.entries(ui.view).map(e => {
       const usable = !ui.verb || (e.it && VERBS[ui.verb].ok(e.it));
-      const label = e.it ? escapeHtml(e.it.name) : '<span class="dim">(nothing)</span>';
+      const label = e.it ? this.itemLabel(e.it) : '<span class="dim">(nothing)</span>';
       const slot = ui.view === 'equip' ? `<span class="slot">${SLOT_NAMES[e.slot].padEnd(7, ' ')}:</span> ` : '';
       return `<div class="row ${usable ? '' : 'dim'}"${e.it && usable ? ` data-k="${e.key}"` : ''}><span class="mk">${e.key})</span> ${slot}${label}</div>`;
     });
     if (!rows.length) rows.push('<div class="dim">(your pack is empty)</div>');
     if (this.touchMode) {
       // Tabs to switch between the pack and the equipment list.
-      const tabs = ui.verb ? '' : `<div class="tabs"><span class="tab${ui.view === 'pack' ? ' on' : ''}" data-k="i">Pack</span><span class="tab${ui.view === 'equip' ? ' on' : ''}" data-k="e">Equipment</span></div>`;
+      const tabs = ui.verb ? '' : this.touchTabs(ui.view);
       const help = ui.verb ? 'Tap an item' : 'Tap an item for what you can do with it';
       this.setHtml(this.touchHead(title, false) + tabs + rows.join('') + `<div class="mf">${help}</div>`);
       return;
     }
     const help = ui.verb ? 'Pick a letter · / switch list · ESC cancel'
-      : ui.view === 'pack' ? 'letter: item menu · w wear · d drop · q quaff · r read · I inspect · k destroy · e equipment · ESC'
-      : 'letter: item menu · t take off · I inspect · i inventory · ESC';
+      : ui.view === 'pack' ? 'letter: item menu · w wear · d drop · q quaff · r read · I inspect · k destroy · e equipment · C stats · ESC'
+      : 'letter: item menu · t take off · I inspect · i inventory · C stats · ESC';
     this.setHtml(`<div class="mh">${title}</div>${rows.join('')}<div class="mf">${help}</div>`);
   }
   renderItemMenu({ ref, it }) {
@@ -158,6 +173,35 @@ export class InventoryMenu {
     const body = `<p>${escapeHtml(it.desc)}</p>`;
     if (this.touchMode) { this.setHtml(this.touchHead(escapeHtml(cap(it.name)), false) + body + `<div class="row" data-k="close">OK</div>`); return; }
     this.setHtml(`<div class="mh">${escapeHtml(cap(it.name))}</div>${body}<p class="dim">${how}</p><div class="mf">(press any key)</div>`);
+  }
+  touchTabs(view) {
+    const tab = (k, label, on) => `<span class="tab${on ? ' on' : ''}" data-k="${k}">${label}</span>`;
+    return `<div class="tabs">${tab('i', 'Pack', view === 'pack')}${tab('e', 'Equipment', view === 'equip')}${tab('C', 'Stats', view === 'sheet')}</div>`;
+  }
+  /** Character sheet: everything your level and gear add up to. */
+  renderSheet() {
+    const me = this.getMe();
+    if (!me) return this.close();
+    const st = me.stats || {};
+    const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
+    const rows = [
+      row('Level', me.lv + (me.xpNext ? ` (XP ${me.xp} / ${me.xpNext})` : ' (max)')),
+      row('HP', `${me.hp} / ${me.maxHp}`),
+      row('Armor', `${st.armor} (blocks ${st.cut}% of each hit)`),
+      row('Speed', `${st.speed}%`),
+      row('Luck', st.luck),
+    ];
+    const extra = [];
+    if (st.letters !== 8) extra.push(row('Spell length', `${st.letters} letters`));
+    if (st.haste) extra.push(row('Spell speed', `+${st.haste}%`));
+    if (st.reach) extra.push(row('Spell reach', `+${st.reach}%`));
+    if (st.stagger) extra.push(row('Stagger', `${st.stagger} s`));
+    if (st.echo) extra.push(row('Echo', `${st.echo}%`));
+    if (st.wordHeal) extra.push(row('Heal per word', `${st.wordHeal} HP`));
+    if (st.blocks) extra.push(row('Shield blocks', st.blocks.split('').join(' ')));
+    const body = `<table class="sheet">${rows.join('')}</table>` + (extra.length ? `<div class="mh" style="margin-top:6px">From your gear</div><table class="sheet">${extra.join('')}</table>` : '');
+    if (this.touchMode) { this.setHtml(this.touchHead(escapeHtml(me.name), false) + this.touchTabs('sheet') + body); return; }
+    this.setHtml(`<div class="mh">${escapeHtml(me.name)}, level ${me.lv} caster</div>${body}<div class="mf">i inventory · e equipment · any other key closes</div>`);
   }
   /** Only touch the DOM when the menu really changed, so a row is never swapped out under a finger. */
   setHtml(html) { if (html !== this.lastHtml) { this.el.innerHTML = html; this.lastHtml = html; } }
