@@ -12,6 +12,7 @@ import { Hud } from './hud.js';
 import { InventoryMenu } from './inventory.js';
 import { Input } from './input.js';
 import { TouchInput } from './touch.js';
+import { RingMenu } from './ring.js';
 import { Lobby } from './lobby.js';
 import { BellChant } from './bell.js';
 
@@ -37,9 +38,13 @@ export class Game {
     this.particles = new Particles();
     this.hud = new Hud();
     this.effects = new EventEffects({ audio: this.audio, particles: this.particles, renderer: this.renderer, getMyId: () => this.myId });
-    this.inventory = new InventoryMenu({ el: $('menu'), network: this.network, getMe: () => this.me, message: (t) => this.hud.message(t) });
+    this.inventory = new InventoryMenu({
+      el: $('menu'), network: this.network, getMe: () => this.me, message: (t) => this.hud.message(t),
+      getPool: () => this.world.map?.pool, toggleCheatSheet: () => { this.hud.toggleCheatSheet(); return !$('cheat').hidden; },
+    });
     this.bell = new BellChant({ audio: this.audio, settings: this.settings });
     this.input = new Input(this);
+    this.ring = new RingMenu(this);
     this.touch = new TouchInput(this);
     this.lobby = new Lobby((name, room) => this.join(name, room));
 
@@ -80,6 +85,7 @@ export class Game {
     this.world.applyState(state);
     for (const e of state.ev) this.effects.play(e);
     this.inventory.refresh();
+    this.ring.refresh();
     this.announceItemsHere();
     this.hud.renderParty(state, this.myId);
     this.hud.renderBoss(state);
@@ -90,10 +96,17 @@ export class Game {
   announceItemsHere() {
     const me = this.me;
     if (!me || me.dead) return;
-    const here = (this.world.state.items || []).filter(f => Math.hypot(f.x - me.x, f.y - me.y) < 0.8);
+    const here = this.itemsHere();
     const key = here.map(f => f.id).join();
-    if (key && key !== this.lastSeenItems) this.hud.message(here.length === 1 ? `You see ${here[0].name}. (g to pick up)` : `You see ${here.length} items here. (g to pick them up)`);
+    const how = this.touch.enabled ? 'tap your caster' : 'g';
+    if (key && key !== this.lastSeenItems) this.hud.message(here.length === 1 ? `You see ${here[0].name}. (${how} to pick up)` : `You see ${here.length} items here. (${how} to pick them up)`);
     this.lastSeenItems = key;
+  }
+  /** Floor items close enough to pick up (same distance the server uses). */
+  itemsHere() {
+    const me = this.me;
+    if (!me || me.dead || !this.world.state) return [];
+    return (this.world.state.items || []).filter(f => Math.hypot(f.x - me.x, f.y - me.y) < 0.8);
   }
 
   // ------------------------------------------------------------------ main loop
@@ -124,6 +137,7 @@ export class Game {
       particles: this.particles,
       insight: !!meData?.equip?.head && meData.equip.head.kind === 'hat_insight', // Circlet of Insight
     });
+    this.ring.place();
     this.hud.renderHoldBar(this.morse, now);
     this.hud.banner(null);
   }
