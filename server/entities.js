@@ -8,7 +8,8 @@
 //      ├── Spell ── PlayerSpell
 //      │      └──── EnemySpell
 //      └── FloorItem
-import { DT, PLAYER, SPELL, EFFECTS } from './config.js';
+import { DT, PLAYER, SPELL, LEVELS } from './config.js';
+import { xpToNext, baseHp, armorFactor, letterDamage } from './progression.js';
 import { rnd, pick } from './util.js';
 import * as Items from './items.js';
 
@@ -63,6 +64,7 @@ export class WordLock {
   apply(letters) {
     let k = 0;
     while (k < letters.length && this.progress + k < this.word.length && letters[k] === this.word[this.progress + k]) k++;
+    this.used = k; // letters this spell spent here (the Gungnir sends the rest on)
     if (k === 0) { this.wrong = 0.4; return 'wrong'; }
     this.progress += k; this.flash = 0.2;
     return this.done ? 'done' : 'hit';
@@ -73,6 +75,9 @@ export class WordLock {
 
 // ------------------------------------------------------------------ player
 
+/** Everything a player's level and gear add up to. Rebuilt whenever the level or the gear changes. */
+const NO_STATS = { armor: 0, hp: 0, hpPct: 0, speed: 0, luck: 0, haste: 0, reach: 0, stagger: 0, echo: 0, wordHeal: 0, letters: 0, hurtMult: 0 };
+
 export class Player extends Actor {
   constructor(ws, name, color) {
     super(0, 0, PLAYER.radius);
@@ -80,16 +85,24 @@ export class Player extends Actor {
     this.name = (name || 'Caster').slice(0, 12);
     this.color = color;
     this.mx = 0; this.my = 0;           // movement input, -1..1
-    this.hp = PLAYER.hp; this.maxHp = PLAYER.hp;
+    this.level = 1; this.xp = 0;
     this.dead = false; this.respawnAt = 0;
     this.kills = 0; this.blocks = 0;
     this.hurt = 0;                      // seconds of hurt flash left
     this.swiftUntil = 0;                // Potion of Speed
     this.ward = 0;                      // hits a Potion of Warding still absorbs
-    this.casts = 0;                     // for Staff of Forking
-    this.regenAt = 0;                   // Amulet of Regeneration timer
+    this.casts = 0;                     // for the Trident of Poseidon
+    this.lastHitAt = 0;                 // for natural regen and the Golden Fleece
+    this.regenAt = 0;                   // next regen tick
+    this.peltAt = 0;                    // Nemean Lion Pelt: next time it can stop a hit
+    this.vanishUntil = 0;               // Ring of Gyges
+    this.pearlUsed = false;             // Pearl of the Dragon King, once per floor
+    this.draupnir = 0;                  // kills counted toward Draupnir's potion
+    this.trail = [];                    // Horseshoes of Sleipnir: recent footsteps
     this.pack = [];                     // inventory a) .. l)
     this.equip = Object.fromEntries(Items.SLOTS.map(k => [k, null]));
+    this.refreshStats();
+    this.hp = this.maxHp;
   }
 
   // ---- networking
@@ -98,19 +111,67 @@ export class Player extends Actor {
   tell(text) { this.send({ t: 'msg', text }); }
   setMoveInput(x, y) { this.mx = Math.max(-1, Math.min(1, +x || 0)); this.my = Math.max(-1, Math.min(1, +y || 0)); }
 
-  // ---- equipment
+  // ---- stats and equipment
   wears(kind) { return Items.SLOTS.some(k => this.equip[k] && this.equip[k].kind === kind); }
-  refreshMaxHp() { this.maxHp = PLAYER.hp + (this.wears('robe_vit') ? 2 : 0); this.hp = Math.min(this.hp, this.maxHp); }
-  get moveSpeed() { return PLAYER.speed * (this.swiftUntil > Date.now() ? 1.5 : 1) * (this.wears('boots_speed') ? 1.25 : 1); }
-  get spellSpeed() { return SPELL.speed * (this.wears('staff_haste') ? 1.4 : 1); }
+  has(fx) { return this.fx.has(fx); }
+  /** Add up level and gear. Keeps current HP (capped at the new max). */
+  refreshStats() {
+    const s = { ...NO_STATS }, fx = new Set();
+    let blocks = '';
+    for (const k of Items.SLOTS) {
+      const it = this.equip[k]; if (!it) continue;
+      for (const [stat, v] of Object.entries(Items.itemStats(it))) s[stat] = stat === 'letters' ? Math.max(s[stat], v) : s[stat] + v;
+      for (const f of Items.itemFx(it)) fx.add(f);
+      blocks += Items.blockedLetters(it);
+    }
+    s.luck += Math.floor(this.level / 5);
+    this.stats = s;
+    this.fx = fx;
+    this.blockSet = new Set(blocks);
+    this.maxHp = Math.max(1, Math.round((baseHp(this.level) + s.hp) * (1 + s.hpPct)));
+    if (this.hp !== undefined) this.hp = Math.min(this.hp, this.maxHp);
+  }
+  get luck() { return this.stats.luck; }
+  get maxLetters() { return this.stats.letters || SPELL.maxLetters; }
+  get moveSpeed() {
+    return PLAYER.speed * (this.swiftUntil > Date.now() ? 1.5 : 1) * (1 + LEVELS.speedPerLevel * (this.level - 1) + this.stats.speed);
+  }
+  get spellSpeed() { return SPELL.speed * (1 + this.stats.haste); }
+  get reach() { return 1 + this.stats.reach; }
+  /** Can enemies see me from this far away? (Helm of Hades, Ring of Gyges) */
+  visibleFrom(d, now) {
+    if (this.vanishUntil > now) return false;
+    return d < (this.has('hidden') ? 5 : 10);
+  }
 
-  heal(n) { this.hp = Math.min(this.maxHp, this.hp + n); }
-  revive(x, y) { this.dead = false; this.hp = this.maxHp; this.x = x; this.y = y; }
-  /** Full heal and place at the start of a fresh floor. */
+  // ---- XP and levels
+  gainXp(room, amount) {
+    if (this.level >= LEVELS.max) return;
+    this.xp += amount;
+    room.emit({ t: 'xp', x: this.x, y: this.y, n: amount, id: this.id });
+    while (this.level < LEVELS.max && this.xp >= xpToNext(this.level)) {
+      this.xp -= xpToNext(this.level);
+      const before = this.maxHp;
+      this.level++;
+      this.refreshStats();
+      this.hp += this.maxHp - before; // the new HP is added, but levelling does not refill you
+      room.emit({ t: 'levelup', x: this.x, y: this.y, id: this.id, lv: this.level });
+      room.say(`${this.name} reached level ${this.level}!`, 2);
+      this.tell(`Welcome to level ${this.level}. Max HP ${this.maxHp}.`);
+    }
+    if (this.level >= LEVELS.max) this.xp = 0;
+  }
+
+  heal(n) { const before = this.hp; this.hp = Math.min(this.maxHp, this.hp + Math.round(n)); return this.hp - before; }
+  revive(x, y) { this.dead = false; this.hp = Math.max(1, Math.round(this.maxHp * LEVELS.reviveShare)); this.x = x; this.y = y; }
+  /** Place at the start of a fresh floor. HP carries over; only the downed come back (at half HP). */
   placeAt(room) {
     const s = room.dungeon.start;
     this.x = s.cx + rnd(-1, 1); this.y = s.cy + rnd(-1, 1);
-    this.refreshMaxHp(); this.hp = this.maxHp; this.dead = false;
+    this.refreshStats();
+    if (this.dead) this.revive(this.x, this.y);
+    this.pearlUsed = false; this.trail = [];
+    for (const k of Items.SLOTS) if (this.equip[k]) delete this.equip[k].stuck; // the Golden Headband lets go
   }
 
   update(room, now, alive) {
@@ -125,21 +186,54 @@ export class Player extends Actor {
     let mx = this.mx, my = this.my; const m = Math.hypot(mx, my);
     if (m > 1) { mx /= m; my /= m; }
     const spd = this.moveSpeed;
-    if (this.wears('amulet_regen') && this.hp < this.maxHp) {
-      if (!this.regenAt) this.regenAt = now + EFFECTS.regenSeconds * 1000;
-      else if (now >= this.regenAt) { this.hp++; this.regenAt = 0; room.emit({ t: 'regen', x: this.x, y: this.y }); }
-    } else this.regenAt = 0;
     this.moveBy(room.dungeon, mx * spd * DT, my * spd * DT);
+    this.regenerate(room, now);
+    if (this.has('trail') && (m > 0.1) && (!this.trail.length || now - this.trail[this.trail.length - 1].t > 150)) {
+      this.trail.push({ x: this.x, y: this.y, t: now });
+    }
+    while (this.trail.length && now - this.trail[0].t > 3000) this.trail.shift();
     if (this.hurt > 0) this.hurt -= DT;
   }
 
-  /** An enemy letter struck this player. Wards and the Ring of Reflection may stop it. */
-  takeHit(room, now) {
+  /** Natural regen is minimal; the Golden Fleece and Brisingamen add more. */
+  regenerate(room, now) {
+    if (this.hp >= this.maxHp) { this.regenAt = 0; return; }
+    const quiet = (now - this.lastHitAt) / 1000;
+    let every = 0, amount = 1;
+    if (this.has('fleece') && quiet >= 5) every = 3;
+    else if (this.has('regen')) { every = 5; amount = Math.max(1, Math.round(this.maxHp * 0.02)); }
+    else if (quiet >= LEVELS.regenDelay) every = LEVELS.regenEvery;
+    if (!every) { this.regenAt = 0; return; }
+    if (!this.regenAt) this.regenAt = now + every * 1000;
+    else if (now >= this.regenAt) {
+      this.regenAt = 0;
+      const got = this.heal(amount);
+      if (got) room.emit({ t: 'regen', x: this.x, y: this.y, n: got });
+    }
+  }
+
+  /** An enemy letter struck this player. Shields, wards and some gear may stop it; armor shrinks the rest. */
+  takeHit(room, now, spell) {
+    if (this.blockSet.has(spell.letters)) { room.emit({ t: 'sblock', x: this.x, y: this.y, l: spell.letters }); return; }
     if (this.ward > 0) { this.ward--; room.emit({ t: 'ward', x: this.x, y: this.y }); return; }
-    if (this.wears('ring_reflect') && Math.random() < 0.25) { room.emit({ t: 'reflect', x: this.x, y: this.y }); return; }
-    this.hp--; this.hurt = 0.4;
-    room.emit({ t: 'hurt', x: this.x, y: this.y, id: this.id });
+    if (this.has('reflect') && Math.random() < 0.25) { room.emit({ t: 'reflect', x: this.x, y: this.y }); return; }
+    this.lastHitAt = now;
+    if (this.has('pelt') && now >= this.peltAt) { this.peltAt = now + 10000; room.emit({ t: 'pelt', x: this.x, y: this.y }); return; }
+    let dmg = spell.damage * rnd(0.75, 1.25) * armorFactor(this.stats.armor) * (1 + this.stats.hurtMult);
+    const moving = Math.hypot(this.mx, this.my) > 0.1;
+    if ((this.has('still') && !moving) || (this.has('moving') && moving)) dmg *= 0.7;
+    dmg = Math.max(1, Math.round(dmg));
+    if (this.has('gaze') && spell.source && !spell.source.removed) spell.source.stun(now, 2000, room, 'stone');
+    if (this.has('vanish')) this.vanishUntil = now + 2000;
+    this.hp -= dmg; this.hurt = 0.4;
+    room.emit({ t: 'hurt', x: this.x, y: this.y, id: this.id, n: dmg });
+    if (this.hp <= 0 && this.has('pearl') && !this.pearlUsed) {
+      this.pearlUsed = true; this.hp = 1;
+      room.emit({ t: 'pearl', x: this.x, y: this.y });
+      this.tell('The Pearl of the Dragon King flares and keeps you standing!');
+    }
     if (this.hp <= 0) {
+      this.hp = 0;
       this.dead = true; this.respawnAt = now + PLAYER.respawnSeconds * 1000;
       room.emit({ t: 'down', x: this.x, y: this.y, id: this.id });
       room.say(`${this.name} is down!`, 2);
@@ -148,24 +242,41 @@ export class Player extends Actor {
 
   // ---- saving: what a player keeps when the lobby is saved and resumed
   toSave() {
-    return { name: this.name, x: this.x, y: this.y, hp: this.hp, dead: this.dead, kills: this.kills, blocks: this.blocks, ward: this.ward, pack: this.pack, equip: this.equip };
+    return { name: this.name, x: this.x, y: this.y, hp: this.hp, dead: this.dead, level: this.level, xp: this.xp, kills: this.kills, blocks: this.blocks, ward: this.ward, pack: this.pack, equip: this.equip };
   }
-  /** Take back saved progress (matched by name when someone rejoins). */
+  /** Take back saved progress (matched by name when someone rejoins). Saves from before levelling start at level 1. */
   restore(s) {
+    this.level = Math.max(1, Math.min(LEVELS.max, s.level | 0 || 1));
+    this.xp = Math.max(0, s.xp | 0);
     this.pack = (s.pack || []).map(Items.restoreItem).filter(Boolean);
-    for (const k of Items.SLOTS) this.equip[k] = Items.restoreItem(s.equip?.[k]);
+    for (const k of Items.SLOTS) this.equip[k] = null;
+    for (const k of Items.SLOTS) {
+      const it = Items.restoreItem(s.equip?.[k]); if (!it) continue;
+      const d = Items.info(it);
+      if (d.level <= this.level && !this.equip[d.slot]) this.equip[d.slot] = it;
+      else Items.addToPack(this.pack, it); // gear above your level waits in the pack
+    }
     this.kills = s.kills | 0; this.blocks = s.blocks | 0; this.ward = s.ward | 0;
     if (Number.isFinite(s.x) && Number.isFinite(s.y)) { this.x = s.x; this.y = s.y; }
-    this.refreshMaxHp();
-    this.hp = s.dead ? this.maxHp : Math.max(1, Math.min(this.maxHp, s.hp | 0));
+    this.refreshStats();
+    const oldSave = !s.level; // hearts, not HP: start full
+    this.hp = s.dead || oldSave ? this.maxHp : Math.max(1, Math.min(this.maxHp, s.hp | 0));
   }
 
   snapshot(now) {
+    const st = this.stats;
     return {
       ...super.snapshot(), name: this.name, color: this.color, hp: this.hp, maxHp: this.maxHp, dead: this.dead,
+      lv: this.level, xp: this.xp, xpNext: this.level >= LEVELS.max ? 0 : xpToNext(this.level),
       hurt: this.hurt > 0, respawn: this.dead ? Math.max(0, Math.ceil((this.respawnAt - now) / 1000)) : 0,
-      kills: this.kills, blocks: this.blocks,
+      kills: this.kills, blocks: this.blocks, hidden: this.vanishUntil > now,
       swift: this.swiftUntil > now ? Math.ceil((this.swiftUntil - now) / 1000) : 0, ward: this.ward,
+      stats: {
+        armor: st.armor, cut: Math.round((1 - armorFactor(st.armor)) * 100), speed: Math.round(this.moveSpeed / PLAYER.speed * 100),
+        luck: st.luck, letters: this.maxLetters, haste: Math.round(st.haste * 100), reach: Math.round(st.reach * 100),
+        stagger: st.stagger, echo: Math.round(st.echo * 100), wordHeal: st.wordHeal, blocks: [...this.blockSet].join(''),
+        fx: [...this.fx],
+      },
       pack: this.pack.map(Items.toClient),
       equip: Object.fromEntries(Items.SLOTS.map(k => [k, Items.toClient(this.equip[k])])),
     };
@@ -182,6 +293,9 @@ export class Enemy extends Actor {
     this.awake = false;
     this.fireCd = rnd(2, 5);
     this.strafe = Math.random() < 0.5 ? 1 : -1;
+    this.stunUntil = 0;  // staggered or stunned: no walking, no attacks
+    this.burnAt = 0;     // Laevateinn: loses one more letter at this time
+    this.burnBy = null;
   }
   // Overridden by subclasses
   get type() { return 'enemy'; }
@@ -194,22 +308,35 @@ export class Enemy extends Actor {
   wants(letter) { return this.lock.next === letter; }
   /** A player spell hit me. Returns 'done', 'hit' or 'wrong' (bosses have a few more). */
   hitBy(room, spell) { return this.lock.apply(spell.letters); }
+  get stunned() { return this.stunUntil > Date.now(); }
+  /** Stagger or stun for ms. kind is only for the effect shown. */
+  stun(now, ms, room, kind = 'stun') {
+    if (ms <= 0) return;
+    this.stunUntil = Math.max(this.stunUntil, now + ms);
+    room.emit({ t: 'stun', x: this.x, y: this.y, kind });
+  }
+  /** One of my letters, flying at a player. */
+  makeLetter(room, x, y, vx, vy) {
+    return new EnemySpell(x, y, pick(room.pool), vx, vy, letterDamage(this.type, room.floor), this);
+  }
   /** Throw one letter at the target, if the room's shot budget allows. */
   attack(room, ux, uy, shots) {
     if (shots.left <= 0) return;
     shots.left--;
     const speed = Math.min(1.8 + room.floor * 0.2, 3.5);
-    room.spells.push(new EnemySpell(this.x + ux * 0.4, this.y + uy * 0.4, pick(room.pool), ux * speed, uy * speed));
+    room.spells.push(this.makeLetter(room, this.x + ux * 0.4, this.y + uy * 0.4, ux * speed, uy * speed));
     room.emit({ t: 'ecast', x: this.x, y: this.y });
   }
 
   /** shots = { left } shared budget so the screen never fills with enemy letters. */
   update(room, now, alive, shots) {
     this.lock.tick();
+    if (this.burnAt && now >= this.burnAt) { const by = this.burnBy; this.burnAt = 0; this.burnBy = null; room.chip(this, by, 'burn'); }
+    if (this.stunUntil > now) return;
     let target = null, td = Infinity;
     for (const pl of alive) {
       const d = this.distanceTo(pl);
-      if (d < td && d < 10 && room.dungeon.los(this.x, this.y, pl.x, pl.y)) { td = d; target = pl; }
+      if (d < td && pl.visibleFrom(d, now) && room.dungeon.los(this.x, this.y, pl.x, pl.y)) { td = d; target = pl; }
     }
     if (!target) return;
     if (!this.awake) { this.awake = true; this.fireCd = rnd(1.5, 3); }
@@ -233,7 +360,7 @@ export class Enemy extends Actor {
       this.attack(room, ux, uy, shots);
     }
   }
-  snapshot() { return { ...super.snapshot(), type: this.type, ...this.lock.snapshot(), awake: this.awake }; }
+  snapshot() { return { ...super.snapshot(), type: this.type, ...this.lock.snapshot(), awake: this.awake, stun: this.stunned, burn: !!this.burnAt }; }
   toSave() { return { type: this.type, x: this.x, y: this.y, lock: this.lock.toSave() }; }
   static fromSave(s) {
     if (s.type === 'boss') return Boss.fromSave(s);
@@ -313,7 +440,7 @@ export class Boss extends Enemy {
     this.volleys++;
     const shoot = (a) => {
       const dx = Math.cos(a), dy = Math.sin(a);
-      room.spells.push(new EnemySpell(this.x + dx * 0.6, this.y + dy * 0.6, pick(room.pool), dx * speed, dy * speed));
+      room.spells.push(this.makeLetter(room, this.x + dx * 0.6, this.y + dy * 0.6, dx * speed, dy * speed));
     };
     const base = Math.atan2(uy, ux);
     if (this.phase > 0 && this.volleys % 3 === 0) {
@@ -405,20 +532,24 @@ export class Spell extends Entity {
   snapshot() { return { ...super.snapshot(), o: this.fromPlayer ? 'p' : 'e', l: this.letters }; }
 }
 
-/** Thrown by enemies: one letter, flies straight. */
+/** Thrown by enemies: one letter, flies straight. damage = points before armor; source = the enemy that threw it. */
 export class EnemySpell extends Spell {
-  constructor(x, y, letter, vx, vy) {
+  constructor(x, y, letter, vx, vy, damage = 4, source = null) {
     super(x, y, letter, vx, vy, 8);
+    this.damage = damage;
+    this.source = source;
     this.countered = false; // a cloak already fired at it
+    this.slowed = false;    // crossed a Sleipnir trail
   }
-  timeScale(room, now) { return room.slowUntil > now ? 0.4 : 1; }
+  timeScale(room, now) { return (room.slowUntil > now ? 0.4 : 1) * (this.slowed ? 0.5 : 1); }
 }
 
 /** Cast by a player: homes on a target and finds its way around walls. */
 export class PlayerSpell extends Spell {
-  constructor(owner, letters, dx, dy, target) {
+  /** from = where it starts (default: the caster). Gungnir's leftovers start at the enemy they just finished. */
+  constructor(owner, letters, dx, dy, target, from = owner) {
     const spd = owner.spellSpeed;
-    super(owner.x + dx * 0.4, owner.y + dy * 0.4, letters, dx * spd, dy * spd, SPELL.lifetime);
+    super(from.x + dx * 0.4, from.y + dy * 0.4, letters, dx * spd, dy * spd, SPELL.lifetime * owner.reach);
     this.owner = owner;
     this.spd = spd;
     this.color = owner.color;
@@ -453,7 +584,7 @@ export class PlayerSpell extends Spell {
     let aim = t;
     if (!dg.los(this.x, this.y, t.x, t.y)) {
       this.repath -= DT;
-      if (!this.path || this.repath <= 0) { this.path = dg.findPath(this.x, this.y, t.x, t.y, SPELL.homingPath) || null; this.repath = 0.25; }
+      if (!this.path || this.repath <= 0) { this.path = dg.findPath(this.x, this.y, t.x, t.y, Math.round(SPELL.homingPath * this.owner.reach)) || null; this.repath = 0.25; }
       if (this.path) {
         while (this.path.length > 1 && Math.hypot(this.path[0].x - this.x, this.path[0].y - this.y) < 0.6) this.path.shift();
         // aim at the farthest of the next few waypoints we can see, so the curve is smooth
@@ -484,7 +615,7 @@ export class FloorItem extends Entity {
   toSave() { return { x: this.x, y: this.y, item: this.item }; }
   static fromSave(s) { const it = Items.restoreItem(s.item); return it ? new FloorItem(it, s.x, s.y) : null; }
   snapshot() {
-    const d = Items.DEFS[this.item.kind];
-    return { id: this.id, x: this.x, y: this.y, kind: this.item.kind, type: d.type, slot: d.slot || null, name: Items.displayName(this.item) };
+    const d = Items.info(this.item);
+    return { id: this.id, x: this.x, y: this.y, kind: this.item.kind, type: d.type, slot: d.slot || null, name: Items.displayName(this.item), lvl: d.level || 0, color: Items.itemColor(this.item) };
   }
 }

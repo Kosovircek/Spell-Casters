@@ -80,6 +80,8 @@ export class Game {
 
   onState(state) {
     this.world.applyState(state);
+    const me = state.players.find(p => p.id === this.myId);
+    if (me && me.stats) this.morse.maxLen = me.stats.letters; // some gear lets spells hold more letters
     for (const e of state.ev) this.effects.play(e);
     this.inventory.refresh();
     this.ring.refresh();
@@ -132,7 +134,7 @@ export class Game {
       myId: this.myId,
       morse: this.morse,
       particles: this.particles,
-      insight: !!meData?.equip?.head && meData.equip.head.kind === 'hat_insight', // Circlet of Insight
+      insight: !!meData?.stats?.fx?.includes('insight'), // Circlet of Insight or the Eye of Odin
     });
     this.ring.place();
     this.hud.renderHoldBar(this.morse, now);

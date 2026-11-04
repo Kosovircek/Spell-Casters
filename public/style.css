@@ -17,7 +17,24 @@ html, body { margin: 0; height: 100%; background: #0b0910; color: #e8e2f4; font-
 #hud { position: absolute; inset: 0; pointer-events: none; }
 #party { position: absolute; left: 12px; top: 12px; font-size: 14px; }
 .pl { margin-bottom: 6px; padding: 4px 8px; background: #0b0910b0; border-left: 4px solid; }
-.pl .hp { color: #ef5350; letter-spacing: 1px; }
+.pl .lv { color: #ffd54f; font-size: 12px; }
+.pl .down { color: #ef5350; font-size: 13px; }
+.bar { position: relative; width: 150px; height: 13px; background: #2a2236; border: 1px solid #4b3d63; margin-top: 3px; }
+.bar i { position: absolute; left: 0; top: 0; bottom: 0; }
+.bar span { position: relative; display: block; text-align: center; font-size: 10px; line-height: 13px; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
+.hpbar i { background: #c62828; }
+.hpbar.low i { background: #ff1744; animation: lowhp 0.8s infinite alternate; }
+@keyframes lowhp { from { opacity: 1; } to { opacity: 0.55; } }
+.xpbar { height: 11px; }
+.xpbar i { background: #7b1fa2; }
+.xpbar span { font-size: 9px; line-height: 11px; }
+#menu .need { color: #ef5350; }
+#menu .myth { color: #ffd54f; }
+#menu .cursed { color: #ef9a9a; }
+#menu .ench { color: #81d4fa; }
+#menu table.sheet { border-collapse: collapse; margin: 4px 0; }
+#menu table.sheet td { padding: 1px 12px 1px 0; }
+#menu table.sheet td:first-child { color: #b9aed0; }
 .pl .stats { color: #9a8fb0; font-size: 12px; }
 #info { position: absolute; right: 12px; top: 12px; text-align: right; background: #0b0910b0; padding: 6px 10px; }
 #info span { display: block; }
@@ -88,6 +105,7 @@ body.touch .touch-only { display: block; }
   body.touch #party { font-size: 11px; left: 6px; top: 6px; }
   body.touch .pl { padding: 2px 6px; margin-bottom: 3px; }
   body.touch .pl .stats { font-size: 10px; }
+  body.touch .bar { width: 110px; }
   body.touch #info { right: 6px; top: 6px; padding: 3px 8px; font-size: 12px; }
   body.touch #cheat { right: 6px; top: 46px; font-size: 10px; padding: 4px 6px; line-height: 1.3; }
   body.touch #morse { bottom: 6px; padding: 3px 10px; min-width: 220px; }

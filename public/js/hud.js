@@ -37,19 +37,31 @@ export class Hud {
   renderParty(state, myId) {
     $('floor').textContent = 'Floor ' + state.floor + (state.stairsOpen ? '  - stairs open!' : '  - foes left: ' + state.enemies.length);
     $('party').innerHTML = state.players.map(p =>
-      `<div class="pl" style="border-color:${p.color}"><b style="color:${p.color}">${escapeHtml(p.name)}${p.id === myId ? ' (you)' : ''}</b><br>` +
-      `<span class="hp">${p.dead ? 'down, back in ' + p.respawn + 's' : '♥'.repeat(p.hp) + '<span style="color:#4b3d63">' + '♥'.repeat(p.maxHp - p.hp) + '</span>'}</span>` +
+      `<div class="pl" style="border-color:${p.color}"><b style="color:${p.color}">${escapeHtml(p.name)}${p.id === myId ? ' (you)' : ''}</b> <span class="lv">Lv ${p.lv}</span>` +
+      this.barsHtml(p, p.id === myId) +
       `<div class="stats">${p.kills} defeated · ${p.blocks} blocked</div>` + this.effectsHtml(p) + `</div>`).join('') +
       (state.slow ? `<div class="pl" style="border-color:#ffd54f"><span class="fx">⌛ Enemy spells slowed ${state.slow}s</span></div>` : '');
     const me = state.players.find(p => p.id === myId);
     $('dead').hidden = !(me && me.dead);
     if (me && me.dead) $('dead').textContent = `You are down. Reviving next to a teammate in ${me.respawn}s...`;
   }
+  /** HP bar with numbers, and an XP bar for yourself. */
+  barsHtml(p, mine) {
+    const hpPct = p.maxHp ? Math.max(0, p.hp / p.maxHp * 100) : 0;
+    const low = hpPct <= 30 ? ' low' : '';
+    let html = p.dead ? `<div class="down">down, back in ${p.respawn}s</div>`
+      : `<div class="bar hpbar${low}"><i style="width:${hpPct}%"></i><span>${p.hp} / ${p.maxHp}</span></div>`;
+    if (mine) html += p.xpNext ? `<div class="bar xpbar"><i style="width:${Math.min(100, p.xp / p.xpNext * 100)}%"></i><span>XP ${p.xp} / ${p.xpNext}</span></div>`
+      : `<div class="bar xpbar"><i style="width:100%"></i><span>Max level</span></div>`;
+    return html;
+  }
   effectsHtml(p) {
     const fx = [];
     if (p.swift) fx.push(`<span class="fx">Swift ${p.swift}s</span>`);
     if (p.ward) fx.push(`<span class="fx">Ward ×${p.ward}</span>`);
-    if (p.equip && p.equip.cloak && p.equip.cloak.letter) fx.push(`<span class="fx">Cloak ${p.equip.cloak.letter}</span>`);
+    if (p.equip && p.equip.cloak && p.equip.cloak.letter) fx.push(`<span class="fx">Mantle ${p.equip.cloak.letter}</span>`);
+    if (p.stats && p.stats.blocks) fx.push(`<span class="fx">Shield ${p.stats.blocks}</span>`);
+    if (p.hidden) fx.push(`<span class="fx">Invisible</span>`);
     return fx.length ? `<div class="effects">${fx.join(' ')}</div>` : '';
   }
 

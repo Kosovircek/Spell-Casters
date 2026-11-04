@@ -75,7 +75,7 @@ export class Player extends Character {
 
   draw(r, view) {
     const d = this.data, ctx = r.ctx, { x: sx, y: sy } = r.toScreen(this.x, this.y);
-    if (d.dead) ctx.globalAlpha = 0.35;
+    if (d.dead) ctx.globalAlpha = 0.35; else if (d.hidden) ctx.globalAlpha = 0.45; // Ring of Gyges
     r.shadow(sx, sy, 6);
     const frame = this.walkFrame;
     const img = wizardSprite(d.color, d.hurt && Math.floor(view.now / 60) % 2 === 0, frame);
@@ -106,6 +106,19 @@ export class Enemy extends Character {
     r.drawFacing(img, sx, sy - h + 2 - bob, w, h, this.face);
     const ly = sy - img.height - 10 - bob + (d.wrong ? Math.round(Math.sin(view.now / 20)) : 0);
     drawLabel(r, view, d, sx, ly, this.labelColors);
+    this.drawStatus(r, view, sx, sy - h - bob);
+  }
+  /** Little stars circling a stunned enemy; sparks off a burning one. */
+  drawStatus(r, view, sx, top) {
+    const d = this.data, ctx = r.ctx;
+    if (d.stun) {
+      ctx.fillStyle = '#fff59d';
+      for (let k = 0; k < 3; k++) {
+        const a = view.now / 250 + k * 2.1;
+        ctx.fillRect(Math.round(sx + Math.cos(a) * 7), Math.round(top + 2 + Math.sin(a) * 2), 2, 2);
+      }
+    }
+    if (d.burn && Math.random() < 0.4) view.particles.sparkle(this.x + (Math.random() - 0.5) * 0.4, this.y, '#ff7043');
   }
 }
 
@@ -202,7 +215,7 @@ export class FloorItem extends Entity {
   get depth() { return this.y - 0.2; }
   draw(r, view) {
     const d = this.data, ctx = r.ctx, { x: sx, y: sy } = r.toScreen(this.x, this.y);
-    const img = itemSprite(d.kind, d.type, d.slot);
+    const img = itemSprite(d.kind, d.type, d.slot, d.color);
     const bob = Math.round(Math.sin(view.now / 300 + this.x * 3));
     r.shadow(sx, sy, 4);
     ctx.drawImage(img, sx - (img.width >> 1), sy - img.height - 1 + bob);
