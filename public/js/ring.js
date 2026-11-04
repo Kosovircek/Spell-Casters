@@ -1,6 +1,6 @@
 // The ring menu: tap your own caster to open a segmented ring around them.
-// Each segment opens a touchable menu (inventory, equipment, potions, scrolls, spells) or acts
-// right away (pick up). It is built for touch, but a mouse click on your caster opens it too.
+// Each segment opens a touchable menu: pack, wield, equipment, potions or scrolls.
+// It is built for touch, but a mouse click on your caster opens it too.
 import { $, VIEW_W, TS } from './constants.js';
 import { chestSprite, itemSprite } from './art/sprites.js';
 
@@ -9,10 +9,8 @@ const OUTER = 96;     // CSS px: outer edge of the ring
 const GAP = 2.5;      // degrees of empty space between two segments
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-/** game provides: me, network, inventory, renderer, world, myId, itemsHere(). */
+/** game provides: me, inventory, renderer, world, myId. Picking up is a tap on the left half instead. */
 const SEGMENTS = [
-  { id: 'pickup', label: 'Pick up', icon: () => itemSprite('ring_reflect', 'gear', 'ring'),
-    count: g => g.itemsHere().length, run: g => g.network.command('pickup') },
   { id: 'pack', label: 'Pack', icon: () => chestSprite(false, false),
     count: g => g.me?.pack.length || 0, run: g => g.inventory.open('pack') },
   { id: 'wield', label: 'Wield', icon: () => itemSprite('staff_fork', 'gear', 'weapon'),
@@ -23,8 +21,6 @@ const SEGMENTS = [
     count: g => countOf(g.me, 'potion'), run: g => g.inventory.open('pack', 'quaff') },
   { id: 'read', label: 'Scrolls', icon: () => itemSprite('scr_slow', 'scroll'),
     count: g => countOf(g.me, 'scroll'), run: g => g.inventory.open('pack', 'read') },
-  { id: 'spells', label: 'Spells', text: '·−',
-    count: () => null, run: g => g.inventory.openSpellbook() },
 ];
 const countOf = (me, type) => (me?.pack || []).filter(it => it.type === type).reduce((a, it) => a + (it.n || 1), 0);
 
@@ -113,13 +109,11 @@ export class RingMenu {
       g.appendChild(path);
       const mid = (a0 + a1) / 2 * Math.PI / 180, r = (INNER + OUTER) / 2 + 2;
       const cx = Math.cos(mid) * r, cy = Math.sin(mid) * r;
-      if (s.icon) {
-        const img = document.createElementNS(SVG_NS, 'image'), c = s.icon(), k = 2;
-        img.setAttribute('href', c.toDataURL());
-        img.setAttribute('width', c.width * k); img.setAttribute('height', c.height * k);
-        img.setAttribute('x', cx - c.width * k / 2); img.setAttribute('y', cy - 6 - c.height * k / 2);
-        g.appendChild(img);
-      } else g.appendChild(text(s.text, cx, cy - 2, 'glyph'));
+      const img = document.createElementNS(SVG_NS, 'image'), c = s.icon(), k = 2;
+      img.setAttribute('href', c.toDataURL());
+      img.setAttribute('width', c.width * k); img.setAttribute('height', c.height * k);
+      img.setAttribute('x', cx - c.width * k / 2); img.setAttribute('y', cy - 6 - c.height * k / 2);
+      g.appendChild(img);
       g.appendChild(text(s.label, cx, cy + 16, 'lbl'));
       s.badge = text('', cx + 15, cy - 14, 'badge');
       g.appendChild(s.badge);

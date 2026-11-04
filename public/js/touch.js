@@ -1,12 +1,14 @@
 // Touch controls for phones and tablets.
 // Left half of the screen: a floating joystick. It appears wherever the finger lands, and the
-// direction from that point to the finger is where the caster walks.
+// direction from that point to the finger is where the caster walks. A quick tap there without
+// dragging picks up the items you are standing on.
 // Right half: a Morse key anywhere. Short tap = dot, long press = dash (same timing as Numpad 5),
 // and a swipe casts the spell in the swiped direction, snapped to the 8 numpad directions.
 // Your own caster (always in the middle of the screen): a tap opens the ring menu. Dragging from
 // the caster walks, like the joystick, so the middle of the screen never feels dead.
 import { $, normalize } from './constants.js';
 
+const TAP_MS = 350;         // a left-half touch shorter than this that never dragged is a pick-up tap
 const STICK_RADIUS = 48;   // px the knob can travel from the joystick centre
 const DEAD_ZONE = 10;      // px of finger travel before the caster starts walking
 const SWIPE_MIN = 30;      // px of finger travel that turns a Morse press into a cast swipe
@@ -72,7 +74,7 @@ export class TouchInput {
       if (ring.isOpen) { ring.close(); continue; }
       if (!this.casterTap && ring.hitsCaster(t.clientX, t.clientY)) { this.casterTap = { id: t.identifier, x: t.clientX, y: t.clientY }; continue; }
       if (t.clientX < innerWidth / 2) {
-        if (!this.stick) { this.stick = { id: t.identifier, ox: t.clientX, oy: t.clientY }; this.drawStick(t.clientX, t.clientY); }
+        if (!this.stick) { this.stick = { id: t.identifier, ox: t.clientX, oy: t.clientY, at: performance.now(), dragged: false }; this.drawStick(t.clientX, t.clientY); }
       } else if (!this.key) this.keyDown(t);
     }
   }
@@ -85,7 +87,7 @@ export class TouchInput {
         // Dragging off the caster: it was not a tap, walk with it instead.
         if (Math.hypot(t.clientX - c.x, t.clientY - c.y) < DEAD_ZONE) continue;
         this.casterTap = null;
-        if (!this.stick) { this.stick = { id: t.identifier, ox: c.x, oy: c.y }; this.steer(t.clientX, t.clientY); }
+        if (!this.stick) { this.stick = { id: t.identifier, ox: c.x, oy: c.y, dragged: true }; this.steer(t.clientX, t.clientY); }
       }
       else if (this.stick && t.identifier === this.stick.id) this.steer(t.clientX, t.clientY);
       else if (this.key && t.identifier === this.key.id) this.keyMove(t);
@@ -96,7 +98,7 @@ export class TouchInput {
     e.preventDefault();
     for (const t of e.changedTouches) {
       if (this.casterTap && t.identifier === this.casterTap.id) { this.casterTap = null; if (!cancelled) this.game.ring.open(); }
-      else if (this.stick && t.identifier === this.stick.id) this.releaseStick();
+      else if (this.stick && t.identifier === this.stick.id) { const s = this.stick; this.releaseStick(); if (!cancelled) this.maybePickUp(s); }
       else if (this.key && t.identifier === this.key.id) this.keyUp(t, cancelled);
     }
   }
@@ -110,6 +112,7 @@ export class TouchInput {
     if (dist > STICK_RADIUS) { s.ox = x - dx / dist * STICK_RADIUS; s.oy = y - dy / dist * STICK_RADIUS; dx = x - s.ox; dy = y - s.oy; }
     this.drawStick(x, y);
     if (dist < DEAD_ZONE) { this.game.input.setTouchMove(0, 0); return; }
+    s.dragged = true;
     const d = normalize(dx, dy); // full speed in any direction, like the keyboard
     this.game.input.setTouchMove(d.x, d.y);
   }
@@ -118,6 +121,14 @@ export class TouchInput {
     this.stick = null;
     this.base.hidden = true;
     this.game.input.setTouchMove(null);
+  }
+
+  /** A quick tap on the left half (no drag) picks up whatever you stand on. */
+  maybePickUp(s) {
+    if (s.dragged || performance.now() - s.at > TAP_MS) return;
+    if (!this.game.itemsHere().length) return; // nothing here: stay quiet instead of "nothing to pick up"
+    this.vibrate(20);
+    this.game.network.command('pickup');
   }
 
   drawStick(x, y) {
