@@ -13,6 +13,7 @@ export class AudioManager {
     this.ctx = null;
     this.tone = null; // { osc, gain } while the Morse key is held
     this.bell = null; // same, while the Bellwraith's bell is ringing
+    this.music = null; // set by the game; ducked while a Morse tone sounds
   }
   /** Browsers only allow audio after a user gesture, so this is created lazily. */
   context() {
@@ -37,14 +38,16 @@ export class AudioManager {
     if (!this.settings.tone || !this.context()) return;
     this.toneOff();
     this.tone = this.startTone('sine', 620, 0.18);
+    this.music?.duck(true);
   }
   /** A fixed-length key tone, for the instant dash key. Separate handle so it never cuts a held tone. */
   beep(ms) {
     if (!this.settings.tone || !this.context()) return;
     const h = this.startTone('sine', 620, 0.18);
-    setTimeout(() => this.stopTone(h), ms);
+    this.music?.duck(true);
+    setTimeout(() => { this.stopTone(h); if (!this.tone) this.music?.duck(false); }, ms);
   }
-  toneOff() { this.stopTone(this.tone); this.tone = null; }
+  toneOff() { this.stopTone(this.tone); this.tone = null; this.music?.duck(false); }
   /** The Bellwraith's bell: lower and rounder than your own key, so you can tell them apart. */
   bellOn() {
     if (!this.settings.sfx || !this.context()) return;

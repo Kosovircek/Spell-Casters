@@ -1,9 +1,9 @@
-// Player settings (Morse speed, sounds), saved in the browser and edited in the Esc panel.
+// Player settings (Morse speed, sounds, music), saved in the browser and edited in the Esc panel.
 import { $ } from './constants.js';
 
 const VERSION = 2; // bump to replace old saved defaults
 // hitboxes: 'duel' (only in duels), 'always' or 'off'
-const DEFAULTS = { wpm: 7, gap: 3, tone: true, sfx: true, haptics: true, hitboxes: 'duel' };
+const DEFAULTS = { wpm: 7, gap: 3, tone: true, sfx: true, haptics: true, hitboxes: 'duel', music: true, musicVol: 50 };
 
 export class Settings {
   constructor() {
@@ -25,16 +25,18 @@ export class Settings {
   /** Wire the settings panel inputs. `morse` is used to show the dot/dash timings. */
   bindPanel(morse) {
     $('wpm').value = this.wpm; $('gap').value = this.gap; $('tone').checked = this.tone; $('sfx').checked = this.sfx; $('haptics').checked = this.haptics;
+    $('music').checked = this.music; $('music-vol').value = this.musicVol;
     $('hitboxes').value = this.hitboxes;
     const update = () => {
       this.wpm = +$('wpm').value; this.gap = +$('gap').value; this.tone = $('tone').checked; this.sfx = $('sfx').checked; this.haptics = $('haptics').checked;
+      this.music = $('music').checked; this.musicVol = +$('music-vol').value;
       this.hitboxes = $('hitboxes').value;
       for (const fn of this.listeners) fn(this);
-      $('wpm-v').textContent = this.wpm; $('gap-v').textContent = this.gap;
+      $('wpm-v').textContent = this.wpm; $('music-vol-v').textContent = this.musicVol; $('gap-v').textContent = this.gap;
       $('unit-v').textContent = Math.round(morse.unit); $('dash-v').textContent = Math.round(morse.dashAt);
       this.save();
     };
-    for (const id of ['wpm', 'gap', 'tone', 'sfx', 'haptics']) $(id).addEventListener('input', update);
+    for (const id of ['wpm', 'gap', 'tone', 'sfx', 'haptics', 'music', 'music-vol']) $(id).addEventListener('input', update);
     $('hitboxes').addEventListener('change', update);
     update();
   }
@@ -44,6 +46,12 @@ export class Settings {
     $('hitboxes').value = this.showHitboxes(duel) ? 'off' : duel ? 'duel' : 'always';
     $('hitboxes').dispatchEvent(new Event('change'));
     return this.showHitboxes(duel);
+  }
+  /** M key: music on / off. */
+  toggleMusic() {
+    $('music').checked = !this.music;
+    $('music').dispatchEvent(new Event('input'));
+    return this.music;
   }
   get panelOpen() { return !$('settings').hidden; }
   togglePanel() { $('settings').hidden = !$('settings').hidden; }
