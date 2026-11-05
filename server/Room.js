@@ -1,12 +1,22 @@
 // One co-op game: a party of up to 4 players sharing a dungeon. Runs the simulation each tick.
-import { TICK_MS, PLAYER, SPELL, EFFECTS, HITBOX } from './config.js';
+//
+// Floors are persistent, like in Angband: the surface town is floor 0, and every floor below keeps its
+// layout, its chests (opened or not) and whatever lies on the ground when the party leaves. Only the enemies
+// come back: a floor gets new ones, as tough as its depth, every time the party arrives. Once a floor has
+// been cleared (its Bellwraith too) its stairs down stay open and its Bellwraith stays gone.
+// The whole party is always on the same floor: stairs, recall and descent scrolls take everyone.
+import { TICK_MS, PLAYER, SPELL, EFFECTS, HITBOX, DEPTH } from './config.js';
 import { rnd, pick } from './util.js';
 import { letterPool, wordsFor } from './words.js';
 import { Dungeon } from './Dungeon.js';
+import { Town } from './Town.js';
 import { Player, Enemy, Slime, Mage, Boss, Chest, PlayerSpell, FloorItem } from './entities.js';
-import { xpFor } from './progression.js';
+import { xpFor, goldFor, chestGold } from './progression.js';
 import { ItemCommands } from './ItemCommands.js';
+import { Shop } from './Shop.js';
 import * as Items from './items.js';
+
+const SHOP_COMMANDS = ['enter', 'buy', 'sell', 'stash', 'take'];
 
 const AUTOSAVE_MS = 30000;
 
@@ -18,13 +28,18 @@ export class Room {
     this.store = store;
     this.players = new Map(); // id -> Player
     this.savedPlayers = {};   // lowercase name -> saved progress of players who are not here right now
-    this.floor = 1;
+    this.floor = 0;           // the floor the party is on: 0 is the surface town
+    this.maxDepth = 0;        // deepest floor reached (a Scroll of Recall read on the surface goes there)
+    this.levels = {};         // floor number -> saved layout, chests, items and cleared flag of floors left behind
+    this.travel = null;       // { at, to } a Scroll of Recall or descent scroll about to carry the party away
+    this.dungeon = null;
     this.foundMythics = new Set(); // mythic items drop at most once per game (like Angband artifacts)
     this.events = [];         // effects for clients (hits, blocks...), flushed every tick
     this.banner = null;       // { text, until } big centred message
     this.itemCommands = new ItemCommands(this);
+    this.shop = new Shop(this);
     const saved = store && store.load(code);
-    if (saved) this.restore(saved); else this.loadFloor();
+    if (saved) this.restore(saved); else this.enterFloor(0, 'start');
     this.timer = setInterval(() => this.tick(), TICK_MS);
     this.autosave = setInterval(() => this.save(), AUTOSAVE_MS);
   }
@@ -35,13 +50,19 @@ export class Room {
     const players = { ...this.savedPlayers };
     for (const pl of this.players.values()) players[pl.name.toLowerCase()] = pl.toSave();
     return {
-      version: 2, room: this.code, savedAt: Date.now(), floor: this.floor, stairsOpen: this.stairsOpen,
+      version: 3, room: this.code, savedAt: Date.now(), floor: this.floor, maxDepth: this.maxDepth,
       foundMythics: [...this.foundMythics],
-      dungeon: this.dungeon.toSave(),
-      enemies: this.enemies.map(e => e.toSave()),
-      chests: this.chests.map(c => c.toSave()),
-      items: this.items.map(f => f.toSave()),
+      levels: { ...this.levels, [this.floor]: this.levelSave() },
+      enemies: this.enemies.map(e => e.toSave()), // the fight on the current floor carries on where it was
+      shop: this.shop.toSave(),
       players,
+    };
+  }
+  /** One floor's persistent part. The town's layout is fixed, so only its items are kept. */
+  levelSave() {
+    return {
+      dungeon: this.floor > 0 ? this.dungeon.toSave() : null, cleared: this.cleared,
+      chests: this.chests.map(c => c.toSave()), items: this.items.map(f => f.toSave()),
     };
   }
   save() {
@@ -50,18 +71,18 @@ export class Room {
     catch (err) { console.error(`Could not save room ${this.code}:`, err.message); return false; }
   }
   restore(s) {
-    this.floor = s.floor;
+    this.floor = Math.max(0, s.floor | 0);
+    this.maxDepth = Math.max(this.floor, s.maxDepth | 0);
     this.foundMythics = new Set(s.foundMythics || []);
-    this.dungeon = new Dungeon(s.dungeon);
-    this.enemies = s.enemies.map(e => Enemy.fromSave(e));
-    this.chests = s.chests.map(c => Chest.fromSave(c));
-    this.items = s.items.map(f => FloorItem.fromSave(f)).filter(Boolean);
-    this.spells = [];
-    this.stairsOpen = !!s.stairsOpen;
-    this.wipeAt = 0;
-    this.slowUntil = 0;
+    this.levels = s.levels || {};
+    // Saves from before persistent floors (version 2) only had the current floor.
+    if (!s.levels) this.levels[this.floor] = { dungeon: s.dungeon, chests: s.chests, items: s.items, cleared: !!s.stairsOpen };
+    this.shop.restore(s.shop);
     this.savedPlayers = s.players || {};
-    this.say(`Welcome back to floor ${this.floor}`, 3);
+    this.loadLevel(this.levels[this.floor]);
+    this.enemies = (s.enemies || []).map(e => Enemy.fromSave(e));
+    this.stairsOpen = this.cleared;
+    this.say(this.floor ? `Welcome back to floor ${this.floor}` : 'Welcome back to the surface', 3);
   }
 
   // ------------------------------------------------------------------ helpers
@@ -69,31 +90,66 @@ export class Room {
   say(text, secs = 3) { this.banner = { text, until: Date.now() + secs * 1000 }; }
   broadcast(obj) { const s = JSON.stringify(obj); for (const pl of this.players.values()) pl.send(s); }
   get alivePlayers() { return [...this.players.values()].filter(p => !p.dead); }
-  get pool() { return letterPool(this.floor); }
+  get pool() { return letterPool(Math.max(1, this.floor)); } // the town uses the floor-1 letters for practice
+  get town() { return this.floor === 0; }
 
   // ------------------------------------------------------------------ floors
-  loadFloor() {
-    this.dungeon = new Dungeon();
+  /** Build the current floor from its saved part, or generate it when the party has never been here. */
+  loadLevel(lv) {
+    this.dungeon = this.town ? new Town() : new Dungeon(lv?.dungeon || null);
+    this.chests = (lv?.chests || []).map(c => Chest.fromSave(c));
+    this.items = (lv?.items || []).map(f => FloorItem.fromSave(f)).filter(Boolean);
+    this.cleared = this.town || !!lv?.cleared;
     this.enemies = [];
     this.spells = [];
-    this.chests = [];
-    this.items = [];
-    this.stairsOpen = false;
     this.wipeAt = 0;
     this.slowUntil = 0;
-    const words = wordsFor(this.pool);
-    this.spawnEnemies(words);
-    this.spawnBoss(words);
-    this.spawnChests(words);
-    for (const pl of this.players.values()) pl.placeAt(this);
+    this.travel = null;
+    if (!this.town && !lv) this.spawnChests(wordsFor(this.pool));
+  }
+
+  /**
+   * Move the party to floor `depth`. how = 'down' or 'up' (stairs: you arrive beside the stairs leading back),
+   * 'travel' (recall or a descent scroll), 'wipe' (the party fell and tries the floor again) or 'start'.
+   */
+  enterFloor(depth, how) {
+    if (this.dungeon) this.levels[this.floor] = this.levelSave(); // the floor we leave stays as it is
+    this.floor = depth;
+    this.maxDepth = Math.max(this.maxDepth, depth);
+    this.loadLevel(this.levels[depth]);
+    if (!this.town) { // new enemies every visit; the Bellwraith only until the floor has been cleared
+      const words = wordsFor(this.pool);
+      this.spawnEnemies(words);
+      if (!this.cleared) this.spawnBoss(words);
+    }
+    this.stairsOpen = this.cleared;
+    const dg = this.dungeon;
+    const at = how === 'down' ? dg.beside('up') : how === 'up' ? dg.beside('down')
+      : this.town ? { x: dg.start.cx, y: dg.start.cy } : dg.beside('up');
+    for (const pl of this.players.values()) pl.placeAt(this, at);
     for (const s of Object.values(this.savedPlayers)) { delete s.x; delete s.y; } // old map positions
     this.broadcast(this.dungeon.toMessage(this.floor, this.pool));
-    this.say(`Floor ${this.floor}`, 3);
+    this.say(this.town ? 'The surface' : `Floor ${this.floor}` + (this.cleared && how !== 'wipe' ? ' (cleared before: new enemies roam it)' : ''), 3);
     if (this.players.size) this.save();
   }
 
+  // ------------------------------------------------------------------ recall and descent scrolls
+  /** Why a travel scroll to this floor would do nothing right now, or null if it works. */
+  travelProblem(to) {
+    if (this.travel) return 'The air is already humming: the party is about to be carried away.';
+    if (to === this.floor) return this.town ? 'You have not been down into the dungeon yet, so the scroll has nowhere to take you.' : `You are already on floor ${to}.`;
+    return null;
+  }
+  startTravel(pl, to) {
+    this.travel = { at: Date.now() + EFFECTS.travelSeconds * 1000, to };
+    const where = to === 0 ? 'up to the surface' : `to floor ${to}`;
+    this.say(`${pl.name} reads a scroll: the party will be carried ${where}...`, 3);
+    for (const p of this.players.values()) p.tell(`The air starts to hum. In ${EFFECTS.travelSeconds} seconds the party is carried ${where}.`);
+    this.emit({ t: 'travel', x: pl.x, y: pl.y });
+  }
+
   spawnEnemies(words) {
-    const count = 3 + this.floor * 2;
+    const count = Math.min(3 + this.floor * 2, DEPTH.maxEnemies);
     const all = this.dungeon.rooms;
     const rooms = all.length > 2 ? all.slice(1, -1) : all.slice(1); // never in the start room; the last room is the boss's
     for (let n = 0; n < count; n++) {
@@ -138,7 +194,7 @@ export class Room {
       const word = chestWords.length ? pick(chestWords) : pick(this.pool) + pick(this.pool);
       let x, y, tries = 0;
       do { x = Math.floor(rnd(r.x, r.x + r.w)) + 0.5; y = Math.floor(rnd(r.y, r.y + r.h)) + 0.5; }
-      while (tries++ < 20 && ((n === 0 && Math.hypot(x - r.cx, y - r.cy) < 1.5) || (x === dg.stairs.x + 0.5 && y === dg.stairs.y + 0.5)));
+      while (tries++ < 20 && ((n === 0 && Math.hypot(x - r.cx, y - r.cy) < 1.5) || dg.stairsAt(x, y)));
       this.chests.push(new Chest(x, y, word));
     }
   }
@@ -156,6 +212,7 @@ export class Room {
       if (!Number.isFinite(saved.x) || this.dungeon.blocked(pl.x, pl.y, pl.radius)) { pl.placeAt(this); pl.restore({ ...saved, x: pl.x, y: pl.y }); }
       delete this.savedPlayers[pl.name.toLowerCase()];
     }
+    pl.onStairs = this.dungeon.stairsAt(pl.x, pl.y);
     this.players.set(pl.id, pl);
     pl.send({ t: 'welcome', id: pl.id, room: this.code });
     pl.send(this.dungeon.toMessage(this.floor, this.pool));
@@ -175,7 +232,10 @@ export class Room {
     const ok = this.save();
     for (const p of this.players.values()) p.tell(ok ? `${pl.name} saved the game.` : 'The game could not be saved.');
   }
-  command(pl, m) { this.itemCommands.run(pl, m); }
+  command(pl, m) {
+    if (SHOP_COMMANDS.includes(m.c)) this.shop.run(pl, m);
+    else this.itemCommands.run(pl, m);
+  }
 
   // ------------------------------------------------------------------ casting
   cast(pl, word, dx, dy) {
@@ -245,6 +305,7 @@ export class Room {
     const count = Math.random() < 0.15 + this.floor * 0.05 + pl.luck * 0.02 ? 2 : 1;
     for (let k = 0; k < count; k++) this.dropItem(this.rollLoot(pl), chest.x + (k ? 0.6 : 0), chest.y + 0.6);
     pl.gainXp(this, xpFor(chest.lock.word, 'chest'));
+    this.giveGold(pl, chestGold(this.floor));
     this.emit({ t: 'chest', x: chest.x, y: chest.y, by: pl.id });
     this.say(`${pl.name} opened a chest!`, 2);
   }
@@ -260,6 +321,12 @@ export class Room {
     if (Items.MYTHIC[it.kind]) this.foundMythics.add(it.kind);
     return it;
   }
+  /** Gold goes straight into the purse of whoever earned it. */
+  giveGold(pl, n) {
+    if (n <= 0) return;
+    pl.gold += n;
+    this.emit({ t: 'gold', x: pl.x, y: pl.y, n, id: pl.id });
+  }
   dropItem(item, x, y) {
     const dg = this.dungeon;
     if (dg.solid(x, y)) { x = Math.floor(x) + 0.5; y = Math.floor(y) + 0.5; }
@@ -274,7 +341,7 @@ export class Room {
 
     for (const pl of this.players.values()) pl.update(this, now, alive);
 
-    const shots = { left: Math.max(1, alive.length) + Math.floor(this.floor / 2) - this.spells.filter(s => !s.fromPlayer).length };
+    const shots = { left: Math.max(1, alive.length) + Math.min(Math.floor(this.floor / 2), DEPTH.maxExtraShots) - this.spells.filter(s => !s.fromPlayer).length };
     for (const e of this.enemies) e.update(this, now, alive, shots);
 
     this.fireCloaks(alive);
@@ -396,6 +463,7 @@ export class Room {
     if (result !== 'done') return;
     e.removed = true; pl.kills++;
     this.emit({ t: 'kill', x: e.x, y: e.y, type: e.type });
+    this.giveGold(pl, goldFor(e.type, this.floor));
     if (e.isBoss) this.bossDefeated(e, pl);
     if (pl.has('draupnir') && ++pl.draupnir % 9 === 0) {
       this.dropItem(Items.makeItem('pot_heal'), e.x, e.y);
@@ -412,27 +480,43 @@ export class Room {
     this.afterEnemyHit(e, result, pl, word, Date.now(), null);
   }
 
-  /** Open the stairs, go down a floor, or restart after a wipe. Returns true if a floor was loaded. */
+  /**
+   * Open the stairs, take the stairs up or down, travel by scroll, or retry after a wipe.
+   * Returns true if the party moved to another floor.
+   */
   checkProgress(now) {
-    if (!this.stairsOpen && this.enemies.length === 0) {
+    if (!this.stairsOpen && !this.town && this.enemies.length === 0) {
       this.stairsOpen = true;
-      this.say('The stairs are open!', 3);
+      this.cleared = true; // stays open on later visits
+      this.say('The stairs down are open!', 3);
       this.emit({ t: 'stairs' });
     }
+    if (this.travel && now >= this.travel.at) { this.enterFloor(this.travel.to, 'travel'); return true; }
     const all = [...this.players.values()];
-    if (this.stairsOpen && all.some(p => !p.dead && this.dungeon.isStairs(p.x, p.y))) {
-      this.floor++; this.loadFloor(); return true;
+    // Stairs work when you step onto them, so arriving next to (or on) them never sends you straight back.
+    for (const p of all) {
+      const on = p.dead ? null : this.dungeon.stairsAt(p.x, p.y), was = p.onStairs;
+      if (on === 'down' && !this.stairsOpen) { // sealed: say so once, and go down as soon as they open
+        if (was !== 'sealed') p.tell('The stairs down are sealed until every enemy on this floor, the Bellwraith too, is gone.');
+        p.onStairs = 'sealed';
+        continue;
+      }
+      p.onStairs = on;
+      if (!on || on === was) continue;
+      if (on === 'up') { this.say(`${p.name} leads the party up`, 2); this.enterFloor(this.floor - 1, 'up'); return true; }
+      this.enterFloor(this.floor + 1, 'down'); return true;
     }
     if (all.length && all.every(p => p.dead)) {
-      if (!this.wipeAt) { this.wipeAt = now + 3000; this.say('Party wiped... retrying floor', 3); }
-      else if (now >= this.wipeAt) { this.loadFloor(); return true; }
+      if (!this.wipeAt) { this.wipeAt = now + 3000; this.say('Party wiped... back to the stairs', 3); }
+      else if (now >= this.wipeAt) { this.enterFloor(this.floor, 'wipe'); return true; }
     }
     return false;
   }
 
   broadcastState(now) {
     const base = JSON.stringify({
-      t: 'state', ts: now, floor: this.floor, stairsOpen: this.stairsOpen,
+      t: 'state', ts: now, floor: this.floor, stairsOpen: this.stairsOpen, maxDepth: this.maxDepth,
+      travel: this.travel ? { to: this.travel.to, secs: Math.max(0, Math.ceil((this.travel.at - now) / 1000)) } : null,
       msg: this.banner && this.banner.until > now ? this.banner.text : null,
       slow: this.slowUntil > now ? Math.ceil((this.slowUntil - now) / 1000) : 0,
       players: [...this.players.values()].map(p => p.snapshot(now)),

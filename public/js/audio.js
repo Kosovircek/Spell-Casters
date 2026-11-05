@@ -2,7 +2,7 @@
 const SOUNDS = { // [wave, startHz, endHz, seconds, volume]
   cast: ['square', 520, 900, 0.12, 0.06], ecast: ['sawtooth', 220, 160, 0.15, 0.04], block: ['triangle', 900, 1600, 0.18, 0.12],
   hit: ['square', 400, 300, 0.1, 0.07], kill: ['triangle', 300, 1200, 0.3, 0.12], hurt: ['sawtooth', 200, 60, 0.25, 0.12],
-  wrong: ['square', 140, 120, 0.12, 0.06], stairs: ['triangle', 400, 800, 0.6, 0.1], chest: ['triangle', 500, 1500, 0.45, 0.12],
+  wrong: ['square', 140, 120, 0.12, 0.06], coin: ['square', 1300, 1900, 0.1, 0.05], stairs: ['triangle', 400, 800, 0.6, 0.1], chest: ['triangle', 500, 1500, 0.45, 0.12],
   cloak: ['sine', 1200, 1800, 0.15, 0.08], shatter: ['triangle', 1800, 300, 0.5, 0.14], shield: ['sine', 300, 700, 0.35, 0.1],
   phase: ['sawtooth', 500, 80, 0.7, 0.1], bossdown: ['triangle', 200, 1600, 1.2, 0.14], ward: ['triangle', 700, 300, 0.2, 0.1], bad: ['square', 120, 90, 0.15, 0.05],
 };

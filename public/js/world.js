@@ -1,13 +1,17 @@
 // Everything the client knows about the current floor: the tile map and the entities on it.
 import { Player, Enemy, Boss, Chest, Spell, FloorItem } from './entities.js';
 
+// Tile codes from the server (see server/Dungeon.js): 0 wall, 1 floor, 2 grass, 3 path, 4 tree, 5 house, 6 shop,
+// 7 house door, 8 shop door. Doors can be walked into.
+export const WALKABLE = new Set([1, 2, 3, 7, 8]);
+
 // Other casters, enemies and spells are drawn this far in the past (two server ticks), so there is nearly always
 // a newer snapshot to slide toward even when Wi-Fi delivers them unevenly.
 const INTERP_MS = 100;
 
 export class World {
   constructor() {
-    this.map = null;        // { w, h, tiles: Uint8Array, stairs, pool, floor }
+    this.map = null;        // { w, h, tiles: Uint8Array, stairs, up, pool, floor, town, doors }
     this.state = null;      // latest raw state message (floor, party stats, banner...)
     this.entities = new Map();
     this.clock = null;      // performance.now() minus server time, for the fastest snapshot seen lately
@@ -19,6 +23,9 @@ export class World {
     this.clock = null;
   }
   tileAt(i, j) { const m = this.map; return i < 0 || j < 0 || i >= m.w || j >= m.h ? 0 : m.tiles[j * m.w + i]; }
+  walkable(i, j) { return WALKABLE.has(this.tileAt(i, j)); }
+  /** The shop or house door at this tile, if any. */
+  doorAt(i, j) { return (this.map?.doors || []).find(d => d.x === i && d.y === j) || null; }
   get ready() { return !!(this.map && this.state); }
 
   /** Apply a state snapshot: create new entities, update known ones, drop the ones that are gone. */

@@ -49,8 +49,35 @@ The menus are the same Angband-style ones as on the keyboard: every row is a but
 - Letters already removed show as `_`, and the next needed letter is yellow.
 - Enemies throw red letter spells. A spell whose first letter matches cancels it in mid-air and keeps flying with its remaining letters. You can also dodge.
 - Aiming is forgiving: a spell picks the best matching target within about 70 degrees of the direction you chose and flies a path to it, curving around walls and corners (up to about 26 tiles of path).
-- Clear the floor, including its boss, then step on the glowing stairs. Floor 1 uses only the easiest letters (E T A N I M); each floor adds more letters and longer words.
-- When you go down you come back next to a teammate after 10 seconds, at half HP. If the whole party is down the floor restarts and everyone is back at half HP.
+- Clear the floor, including its boss, then step on the glowing stairs down. Floor 1 uses only the easiest letters (E T A N I M); each floor adds more letters and longer words.
+- When you go down you come back next to a teammate after 10 seconds, at half HP. If the whole party is down, everyone wakes up at half HP by the stairs up of the same floor, and the floor's enemies come back.
+
+## The surface and persistent floors
+
+A new game starts on **the surface**, a small village above the dungeon with your house, a shop and the stairs down to floor 1.
+
+- **Floors are persistent**, like in Angband. Every floor keeps its layout, its chests (opened or not) and every item lying on the ground when you leave it, also after the game is saved and loaded.
+- **Only the enemies come back.** Every time the party arrives on a floor it gets new enemies, as tough as that floor's depth (more of them, more letters, harder hits).
+- **Stairs up and down.** Each floor has pale stairs up in the corner of the room you arrive in, and the stairs down in the Bellwraith's room. Stairs up always work. The stairs down open once every enemy, the Bellwraith too, is gone; after that they stay open on every later visit and that floor's Bellwraith does not come back. You use stairs by stepping onto them, so arriving next to stairs never sends you straight back.
+- The whole party is always on the same floor: when one caster takes the stairs (or a travel scroll goes off), everyone goes.
+- The floor line (top right) shows your floor, and on the surface the deepest floor the party has reached.
+
+### Gold, the shop and your house
+
+- **Gold**: every caster starts with 100. Whoever finishes an enemy gets a little gold (more deeper down, x1.5 for mages, x10 for the Bellwraith), and whoever opens a chest gets some too. It shows in the party panel and on the character sheet.
+- **The shop** (Dot & Dash Goods, the blue roof): walk up to its door to open it. Tabs: *Potions & scrolls*, *Weapons*, *Armour* (Bronze and Iron gear) and *Sell*. The shop buys anything from your pack for a third of its price. Things it does not stock itself (better gear, mythic items) stay on its shelf, marked "sold by a caster", so they can be bought back.
+- **Your house** (the red roof): every caster has their own, with room for 24 items. Tabs: *Your house* (take things out) and *Your pack* (leave things there). It is kept in the save with the rest of your caster.
+- Keys in both: a letter picks an item, then **y** (or Enter) buys, sells, takes or stores it. **Tab**, **← →** or **1-4** switch tabs. **Esc** leaves. On touch screens tap the tabs and items; walking away closes the screen.
+
+| Item | Price | What it does |
+| --- | --- | --- |
+| Potion of Healing / Speed / Warding | 25 / 40 / 40 | As below |
+| Scroll of Teleportation / Slow Time / Resurrection | 40 / 50 / 200 | As below |
+| Scroll of Recall | 125 | After 5 seconds the party is pulled up to the surface. Read on the surface, it takes the party down to the deepest floor reached |
+| Scroll of Descent to Floor 10 / 20 / 30 / 40 / 50 | 400 / 1000 / 2000 / 3500 / 5000 | After 5 seconds the party goes straight to that floor |
+| Bronze / Iron weapons and armour | 40 / 120 (mail 60 / 180) | Plain common gear; a shop shield blocks one random common letter |
+
+A travel scroll that would do nothing (Recall on the surface before anyone has been down, or a descent to the floor you are on) is not used up. Chests can also hold a Scroll of Recall now and then.
 
 ## Levels, HP and damage
 
@@ -107,7 +134,7 @@ Every floor has 2 to 4 chests with a gold word above them; one is always in the 
 Numpad Morse and aiming keep working while a menu is open. The game does not pause.
 
 **Potions** (quaff): Healing (30% of max HP), Speed (+50% run speed for 30s), Warding (absorbs the next 2 hits).
-**Scrolls** (read): Slow Time (enemy spells at 40% speed for 15s), Teleportation (random room), Resurrection (revives downed teammates at half HP, heals the party 20%).
+**Scrolls** (read): Slow Time (enemy spells at 40% speed for 15s), Teleportation (random room), Resurrection (revives downed teammates at half HP, heals the party 20%), Recall and Descent (see *The surface and persistent floors*).
 
 Every piece of gear needs a minimum level. You can carry gear above your level; it shows "(needs Lv N)" in red until you get there. There are eight slots: weapon, shield, ring, amulet, head, body, cloak, feet.
 
@@ -162,7 +189,7 @@ Items stay with you between floors and when you go down. For testing, `FORCE_ITE
 
 ## Saving lobbies
 
-A lobby (room) is saved on the server as `saves/<room>.json`: the floor, the map, the enemies left, the chests and items on the floor, and every player's level, XP, HP, gear, pack and position. Saves from before levelling still load: those casters start at level 1, their old items turn into the closest new ones, and gear above their level goes into the pack.
+A lobby (room) is saved on the server as `saves/<room>.json`: the current floor and the deepest one reached, the layout, chests and floor items of every floor visited, the enemies left on the current floor, the shop's shelf, and every player's level, XP, HP, gold, gear, pack, house and position. Saves from before persistent floors still load: their current floor becomes the first saved floor (with stairs up added), and every caster gets a starting purse of 100 gold. Saves from before levelling still load: those casters start at level 1, their old items turn into the closest new ones, and gear above their level goes into the pack.
 
 - It saves every 30 seconds, on every new floor, whenever someone leaves, when anyone presses **Ctrl+S**, and when you stop the server with Ctrl+C.
 - To carry on, open the game, click the saved lobby on the start screen (or type its room name) and enter **the same name as before**. Your gear comes back; a new name starts with an empty pack.
@@ -186,13 +213,15 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `StaticServer.js` | Serves the `public/` folder |
 | `GameServer.js` | **Networking**: WebSocket connections, rooms, routing messages (`join`, `move`, `cast`, `cmd`) |
 | `DuelRoom.js` | **The duel room**: `Arena` (the platform, a `Dungeon` subclass), `DuelPlayer`, `DuelSpell`, rounds and spell-vs-spell blocking |
-| `Room.js` | **One co-op game**: loads floors, runs `tick()` (update entities, collisions, stairs, wipe), casting and targeting, broadcasts state |
+| `Room.js` | **One co-op game**: keeps every visited floor (`levels`), moves the party between floors (`enterFloor`: stairs, recall and descent scrolls, wipes), runs `tick()` (update entities, collisions, stairs, wipe), casting and targeting, broadcasts state |
+| `Town.js` | `Town`: the surface village (a fixed `Dungeon` subclass with the house, the shop, their doors and the stairs down) |
+| `Shop.js` | `Shop`: the shop's stock, buying, selling and its shelf of resold items, and every caster's house storage |
 | `entities.js` | **OOP game objects**: `Entity` → `Actor` → `Player`, `Enemy` (→ `Slime`, `Mage`, `Boss`); `Chest`; `Spell` (→ `PlayerSpell`, `EnemySpell`); `FloorItem`; and `WordLock` (the spell-the-word rule shared by enemies and chests) |
-| `Dungeon.js` | Map generation plus collision, line of sight and path finding |
+| `Dungeon.js` | Tile codes, map generation with stairs down and up, plus collision, line of sight and path finding |
 | `ItemCommands.js` | Angband item commands: quaff, read, wield, take off, drop, destroy, pick up |
 | `SaveStore.js` | Reads and writes lobby saves in `saves/`; entities, `Dungeon` and `Room` each have `toSave()` / `fromSave()` |
-| `items.js` | Item definitions (materials, bases, enchantments, mythic items), names, loot rolls, pack stacking |
-| `progression.js` | XP values, the level curve, enemy damage and armor |
+| `items.js` | Item definitions (materials, bases, enchantments, mythic items, scrolls), prices, names, loot rolls, pack stacking |
+| `progression.js` | XP values, the level curve, enemy damage and armor, gold for kills and chests |
 | `words.js` | Letters and words per floor |
 | `config.js` | All tunable numbers (speeds, ranges, timings) |
 | `util.js` | Random helpers |
@@ -212,6 +241,7 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `morse.js` | `MorseKey`: dot/dash timing and decoding |
 | `hud.js` | `Hud`: party panel, Morse box, banner, cheat sheet, message line |
 | `inventory.js` | `InventoryMenu`: the Angband-style inventory, equipment and character sheet popup |
+| `store.js` | `StoreMenu`: the shop and house screens on the surface (opened by walking up to their doors) |
 | `bell.js` | `BellChant`: plays the Bellwraith's bell letter in Morse (flashes and tone) |
 | `effects.js` | `EventEffects`: turns server events into sounds and particles |
 | `particles.js` | `Particles`: sparks and floating text |
@@ -219,4 +249,4 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `settings.js` | `Settings`: saved preferences and the Esc panel |
 | `lobby.js` | `Lobby`: name and room screen |
 | `constants.js` | Screen size, key maps, small helpers |
-| `art/` | Procedural pixel art: `canvas.js` (helpers), `font.js`, `sprites.js`, `tiles.js`, `arena.js` (the duel platform and starry sky) |
+| `art/` | Procedural pixel art: `canvas.js` (helpers), `font.js`, `sprites.js`, `tiles.js` (dungeon, stairs up and down, and the village's grass, paths, trees and buildings), `arena.js` (the duel platform and starry sky) |

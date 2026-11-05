@@ -35,6 +35,14 @@ export class ItemCommands {
   read(pl, item) {
     const room = this.room;
     if (!item || Items.info(item).type !== 'scroll') return pl.tell('You cannot read that.');
+    if (Items.info(item).travel) { // Recall and the descent scrolls carry the whole party, after a few seconds
+      const to = Items.info(item).depth ?? (room.floor > 0 ? 0 : room.maxDepth);
+      const why = room.travelProblem(to);
+      if (why) return pl.tell(why); // nothing happens, and the scroll is kept
+      this.takeOne(pl, item);
+      room.startTravel(pl, to);
+      return this.used(pl, item);
+    }
     this.takeOne(pl, item);
     if (item.kind === 'scr_slow') { room.slowUntil = Date.now() + EFFECTS.slowSeconds * 1000; room.say(`${pl.name} slows time!`, 2); }
     if (item.kind === 'scr_tele') {

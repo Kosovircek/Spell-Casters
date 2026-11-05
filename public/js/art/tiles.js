@@ -41,8 +41,87 @@ function wallTile(variant) {
   }
   return c;
 }
+/** Stairs up: pale steps that climb toward the top of the tile. */
+function upStairsTile() {
+  const c = floorTile(1, false), g = c.getContext('2d');
+  for (let k = 0; k < 4; k++) {
+    const y = 12 - k * 3, w = 12 - k * 2;
+    g.fillStyle = '#0b0910'; g.fillRect(2 + k, y, w, 3);
+    g.fillStyle = k % 2 ? '#b9aed0' : '#9a8fb0'; g.fillRect(2 + k, y, w, 2);
+    g.fillStyle = '#e8e2f4'; g.fillRect(2 + k, y, w, 1);
+  }
+  return c;
+}
+
+// ---- the surface town
+/** Ground tiles: grass (with the odd flower) and dirt path. */
+function groundTile(kind, variant) {
+  const c = makeCanvas(TS, TS); const g = c.getContext('2d');
+  for (let py = 0; py < TS; py++) for (let px = 0; px < TS; px++) {
+    const n = hash(px + variant * 17 + (kind === 'path' ? 300 : 0), py + variant * 23);
+    let col;
+    if (kind === 'grass') col = n < 0.15 ? '#2f5629' : n > 0.9 ? '#4f8240' : '#3d6b35';
+    else col = n < 0.12 ? '#5e452b' : n > 0.9 ? '#8d6e4a' : '#7a5c3a';
+    g.fillStyle = col; g.fillRect(px, py, 1, 1);
+  }
+  if (kind === 'grass' && variant === 3) { // a few flowers
+    g.fillStyle = '#fff59d'; g.fillRect(4, 5, 1, 1); g.fillRect(11, 10, 1, 1);
+    g.fillStyle = '#f48fb1'; g.fillRect(8, 12, 1, 1);
+  }
+  return c;
+}
+/** A tree: a round, lumpy canopy with a trunk under it. Grass is drawn beneath, so the corners stay open. */
+function treeTile(variant) {
+  const c = makeCanvas(TS, TS + WALL_H); const g = c.getContext('2d');
+  const cx = 7.5 + (variant ? 0.5 : -0.5), cy = 10, r = 8.2;
+  g.fillStyle = '#3e2a1a'; g.fillRect(6, 18, 4, 10); g.fillStyle = '#5d4027'; g.fillRect(7, 18, 2, 10); // trunk
+  for (let py = 0; py < TS + WALL_H; py++) for (let px = 0; px < TS; px++) {
+    const d = Math.hypot(px - cx, (py - cy) * 1.1) + hash(px + variant * 41, py) * 1.2;
+    if (d > r) continue;
+    const lit = (px - cx) + (py - cy) < -4; // light from the top left
+    const n = hash(px + variant * 13, py + 51);
+    g.fillStyle = d > r - 1.2 ? '#14290f' : lit ? (n > 0.6 ? '#5f9a4c' : '#4f8240') : py > cy + 3 ? '#24481f' : (n > 0.85 ? '#4f8240' : '#356b2e');
+    g.fillRect(px, py, 1, 1);
+  }
+  return c;
+}
+/** A building block: a shingled roof on top; the front face is the wall you see (with a window or a door). */
+function buildingTile(kind, front) {
+  const roof = kind === 'house' ? ['#7b3a2a', '#9c4a33', '#5a2a1f'] : ['#3d4a66', '#506080', '#2a3349'];
+  const wall = kind === 'house' ? ['#d7c49e', '#bfa97f', '#5d4027'] : ['#a7a3b8', '#8f8ba3', '#4a4560'];
+  const c = makeCanvas(TS, TS + WALL_H); const g = c.getContext('2d');
+  for (let py = 0; py < TS; py++) for (let px = 0; px < TS; px++) { // roof shingles
+    const row = Math.floor(py / 3), sx = (px + (row % 2) * 3) % 6;
+    g.fillStyle = py % 3 === 2 ? roof[2] : sx === 0 ? roof[2] : hash(px, py + row) > 0.85 ? roof[1] : roof[0];
+    g.fillRect(px, py, 1, 1);
+  }
+  for (let py = 0; py < WALL_H; py++) for (let px = 0; px < TS; px++) { // the wall
+    g.fillStyle = py < 2 ? wall[2] : (hash(px + 5, py + 9) > 0.9 ? wall[1] : wall[0]);
+    g.fillRect(px, TS + py, 1, 1);
+  }
+  g.fillStyle = wall[2]; g.fillRect(0, TS, 1, WALL_H); // timber post between blocks
+  if (front === 'window') {
+    g.fillStyle = wall[2]; g.fillRect(4, TS + 3, 8, 6);
+    g.fillStyle = '#ffd54f'; g.fillRect(5, TS + 4, 6, 4);
+    g.fillStyle = '#ffb300'; g.fillRect(8, TS + 4, 1, 4); g.fillRect(5, TS + 6, 6, 1);
+  }
+  if (front === 'door') {
+    g.fillStyle = wall[2]; g.fillRect(4, TS + 1, 8, WALL_H - 1);
+    g.fillStyle = kind === 'house' ? '#8d5a2b' : '#6d4c41'; g.fillRect(5, TS + 2, 6, WALL_H - 2);
+    g.fillStyle = '#5d4027'; g.fillRect(8, TS + 2, 1, WALL_H - 2);
+    g.fillStyle = '#ffd54f'; g.fillRect(9, TS + 7, 1, 1); // the handle
+  }
+  return c;
+}
+
 export const TILES = {
   floor: [0, 1, 2, 3].map(v => floorTile(v, false)),
   stairs: floorTile(0, true),
+  upStairs: upStairsTile(),
   wall: [0, 1, 2].map(v => wallTile(v)),
+  grass: [0, 1, 2, 3].map(v => groundTile('grass', v)),
+  path: [0, 1].map(v => groundTile('path', v)),
+  tree: [0, 1].map(v => treeTile(v)),
+  house: { plain: buildingTile('house', null), window: buildingTile('house', 'window'), door: buildingTile('house', 'door') },
+  shop: { plain: buildingTile('shop', null), window: buildingTile('shop', 'window'), door: buildingTile('shop', 'door') },
 };

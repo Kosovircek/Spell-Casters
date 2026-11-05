@@ -190,6 +190,7 @@ export class InventoryMenu {
       row('Armor', `${st.armor} (blocks ${st.cut}% of each hit)`),
       row('Speed', `${st.speed}%`),
       row('Luck', st.luck),
+      row('Gold', me.gold ?? 0),
     ];
     const extra = [];
     if (st.letters !== 8) extra.push(row('Spell length', `${st.letters} letters`));

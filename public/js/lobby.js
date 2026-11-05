@@ -29,7 +29,7 @@ export class Lobby {
     if (!saves.length) { el.hidden = true; return; }
     el.hidden = false;
     el.innerHTML = '<div class="saves-title">Saved games: click one, then enter the same name as before to get your gear back</div>' +
-      saves.map(s => `<button class="save" data-room="${escapeHtml(s.room)}"><b>${escapeHtml(s.room)}</b> · floor ${s.floor} · ${escapeHtml(s.players.join(', ') || 'no players')} · ${timeAgo(s.savedAt)}</button>`).join('');
+      saves.map(s => `<button class="save" data-room="${escapeHtml(s.room)}"><b>${escapeHtml(s.room)}</b> · ${s.floor ? 'floor ' + s.floor : 'on the surface'} · ${escapeHtml(s.players.join(', ') || 'no players')} · ${timeAgo(s.savedAt)}</button>`).join('');
     for (const b of el.querySelectorAll('button.save')) b.onclick = () => { $('room').value = b.dataset.room; $('name').focus(); };
   }
   submit(mode) {

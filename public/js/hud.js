@@ -46,14 +46,16 @@ export class Hud {
   // ---- party panel and floor info
   renderParty(state, myId) {
     const duel = state.duel;
+    const travel = state.travel ? `  · carried ${state.travel.to ? 'to floor ' + state.travel.to : 'to the surface'} in ${state.travel.secs}s` : '';
     $('floor').textContent = duel ? `Duel · round ${duel.round || '-'} · first to ${duel.need} wins · H: Morse sheet · B: hitboxes`
-      : 'Floor ' + state.floor + (state.stairsOpen ? '  - stairs open!' : '  - foes left: ' + state.enemies.length);
+      : !state.floor ? `The surface${state.maxDepth ? ` · deepest floor ${state.maxDepth}` : ' · stairs down to floor 1'}${travel}`
+      : 'Floor ' + state.floor + (state.stairsOpen ? '  - stairs down open' : '  - foes left: ' + state.enemies.length) + travel;
     this.setHtml($('party'), state.players.map(p =>
       `<div class="pl" style="border-color:${p.color}"><b style="color:${p.color}">${escapeHtml(p.name)}${p.id === myId ? ' (you)' : ''}</b>` +
       (duel ? '' : ` <span class="lv">Lv ${p.lv}</span>`) +
       this.barsHtml(p, p.id === myId && !duel, duel) +
       (duel ? `<div class="stats">${p.wins} round${p.wins === 1 ? '' : 's'} won · ${p.blocks} letters blocked</div>`
-        : `<div class="stats">${p.kills} defeated · ${p.blocks} blocked</div>` + this.effectsHtml(p)) + `</div>`).join('') +
+        : `<div class="stats">${p.kills} defeated · ${p.blocks} blocked${p.id === myId ? ` · <span class="gold">${p.gold} gold</span>` : ''}</div>` + this.effectsHtml(p)) + `</div>`).join('') +
       (state.slow ? `<div class="pl" style="border-color:#ffd54f"><span class="fx">⌛ Enemy spells slowed ${state.slow}s</span></div>` : ''));
     const me = state.players.find(p => p.id === myId);
     $('dead').hidden = !(me && me.dead) || !!duel; // in a duel the round banner says it

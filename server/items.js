@@ -9,6 +9,7 @@ import { pick } from './util.js';
 
 export const SLOTS = ['weapon', 'shield', 'ring', 'neck', 'head', 'body', 'cloak', 'feet'];
 export const PACK_SIZE = 12; // inventory letters a) to l)
+export const HOME_SIZE = 24; // what your house on the surface can hold
 
 // ------------------------------------------------------------------ materials
 // A material sets an item's level and the size of its numbers. Every table below has one value per material.
@@ -96,16 +97,36 @@ export const MYTHIC = {
 };
 
 // ------------------------------------------------------------------ potions, scrolls and the circlet
-// weight = how often a chest drops it among potions and scrolls. The Circlet of Insight is a simple learning aid.
+// weight = how often a chest drops it among potions and scrolls (0 = only the shop sells it).
+// cost = the shop's price in gold. The Circlet of Insight is a simple learning aid.
+// depth = a travel scroll: the party is carried to that floor a few seconds after reading it.
 export const CONSUMABLES = {
-  pot_heal:  { type: 'potion', weight: 6, name: 'Potion of Healing', desc: 'Heals 30% of your max HP.' },
-  pot_speed: { type: 'potion', weight: 3, name: 'Potion of Speed', desc: 'You run 50% faster for 30 seconds.' },
-  pot_ward:  { type: 'potion', weight: 3, name: 'Potion of Warding', desc: 'A shimmering bubble absorbs the next 2 hits.' },
-  scr_slow:  { type: 'scroll', weight: 3, name: 'Scroll of Slow Time', desc: 'Every enemy spell on the floor crawls at 40% speed for 15 seconds.' },
-  scr_tele:  { type: 'scroll', weight: 3, name: 'Scroll of Teleportation', desc: 'Teleports you to a random room on this floor. Handy for escaping.' },
-  scr_life:  { type: 'scroll', weight: 1, name: 'Scroll of Resurrection', desc: 'Revives every downed teammate at your side at half HP and heals the whole party 20% of their max HP.' },
-  circlet:   { type: 'gear', slot: 'head', level: 1, name: 'Circlet of Insight', stats: { armor: 1 }, fx: ['insight'], desc: 'Shows the Morse code for the next letter above every enemy and chest. Great for learning.' },
+  pot_heal:  { type: 'potion', weight: 6, cost: 25, name: 'Potion of Healing', desc: 'Heals 30% of your max HP.' },
+  pot_speed: { type: 'potion', weight: 3, cost: 40, name: 'Potion of Speed', desc: 'You run 50% faster for 30 seconds.' },
+  pot_ward:  { type: 'potion', weight: 3, cost: 40, name: 'Potion of Warding', desc: 'A shimmering bubble absorbs the next 2 hits.' },
+  scr_slow:  { type: 'scroll', weight: 3, cost: 50, name: 'Scroll of Slow Time', desc: 'Every enemy spell on the floor crawls at 40% speed for 15 seconds.' },
+  scr_tele:  { type: 'scroll', weight: 3, cost: 40, name: 'Scroll of Teleportation', desc: 'Teleports you to a random room on this floor. Handy for escaping.' },
+  scr_life:  { type: 'scroll', weight: 1, cost: 200, name: 'Scroll of Resurrection', desc: 'Revives every downed teammate at your side at half HP and heals the whole party 20% of their max HP.' },
+  scr_recall:{ type: 'scroll', weight: 1, cost: 125, name: 'Scroll of Recall', travel: true, desc: 'A few seconds after you read it, the whole party is pulled up to the surface. Read on the surface, it takes the party back down to the deepest floor you have reached.' },
+  scr_d10:   { type: 'scroll', weight: 0, cost: 400, depth: 10, name: 'Scroll of Descent to Floor 10', travel: true, desc: 'A few seconds after you read it, the whole party sinks straight to floor 10.' },
+  scr_d20:   { type: 'scroll', weight: 0, cost: 1000, depth: 20, name: 'Scroll of Descent to Floor 20', travel: true, desc: 'A few seconds after you read it, the whole party sinks straight to floor 20.' },
+  scr_d30:   { type: 'scroll', weight: 0, cost: 2000, depth: 30, name: 'Scroll of Descent to Floor 30', travel: true, desc: 'A few seconds after you read it, the whole party sinks straight to floor 30.' },
+  scr_d40:   { type: 'scroll', weight: 0, cost: 3500, depth: 40, name: 'Scroll of Descent to Floor 40', travel: true, desc: 'A few seconds after you read it, the whole party sinks straight to floor 40.' },
+  scr_d50:   { type: 'scroll', weight: 0, cost: 5000, depth: 50, name: 'Scroll of Descent to Floor 50', travel: true, desc: 'A few seconds after you read it, the whole party sinks straight to floor 50. Only for the bravest.' },
+  circlet:   { type: 'gear', slot: 'head', level: 1, cost: 60, name: 'Circlet of Insight', stats: { armor: 1 }, fx: ['insight'], desc: 'Shows the Morse code for the next letter above every enemy and chest. Great for learning.' },
 };
+
+// ------------------------------------------------------------------ prices
+// What the shop asks for an item. It pays a third of that when you sell it.
+const MATERIAL_COST = [40, 120, 300, 700, 1500];
+export function itemValue(it) {
+  const d = info(it);
+  if (!d) return 0;
+  if (d.mythic) return 400 + d.level * 80;
+  if (d.base) return Math.round(MATERIAL_COST[it.mat] * (it.ench ? 1.6 : 1) * (d.base.slot === 'body' ? 1.5 : 1));
+  return d.cost || 10;
+}
+export const sellPrice = (it) => Math.max(1, Math.floor(itemValue(it) / 3));
 
 const pct = (v) => Math.round(v * 100) + '%';
 
@@ -191,7 +212,7 @@ export function toClient(it) {
     id: it.id, kind: it.kind, type: d.type, slot: d.slot || null, name: displayName(it), desc: describe(it), n: it.n,
     letter: it.letter || null, letters: blockedLetters(it) || null, lvl: d.level || 0,
     rarity: d.mythic ? 'mythic' : it.ench ? 'enchanted' : d.type === 'gear' ? 'common' : null,
-    color: itemColor(it),
+    color: itemColor(it), sell: sellPrice(it),
   };
 }
 export function itemColor(it) {
@@ -269,13 +290,13 @@ function forceItem(spec, pool) {
   return null;
 }
 
-// Put an item in a pack, stacking potions and scrolls. Returns false if the pack is full.
-export function addToPack(pack, it) {
+// Put an item in a pack (or the house), stacking potions and scrolls. Returns false if it is full.
+export function addToPack(pack, it, size = PACK_SIZE) {
   if (!isGear(it)) {
     const same = pack.find(o => o.kind === it.kind);
     if (same) { same.n += it.n; return true; }
   }
-  if (pack.length >= PACK_SIZE) return false;
+  if (pack.length >= size) return false;
   pack.push(it);
   // Angband keeps the pack sorted: potions, scrolls, then gear
   const order = { potion: 0, scroll: 1, gear: 2 };
