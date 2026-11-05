@@ -109,37 +109,59 @@ export class Renderer {
     ctx.restore();
   }
 
-  /** Floors are drawn right away; walls are returned so they sort with entities (a wall can hide you). */
+  /**
+   * Ground is drawn right away; raised blocks (walls, trees, buildings and their doors) are returned so they
+   * sort with entities (a wall can hide you). The shop and house names hang above their doors.
+   */
   drawFloorAndCollectWalls(world, focus, now) {
     const { ctx } = this, map = world.map, state = world.state, walls = [];
     for (let j = 0; j < map.h; j++) for (let i = 0; i < map.w; i++) {
       const sx = i * TS + this.ox, sy = j * TS + this.oy;
       if (sx < -TS || sx > VIEW_W || sy < -TS || sy > VIEW_H + WALL_H + TS) continue;
-      if (map.tiles[j * map.w + i] === 1) {
-        const isStairs = i === map.stairs.x && j === map.stairs.y;
-        ctx.drawImage(isStairs ? TILES.stairs : TILES.floor[Math.floor(hash(i, j) * 4)], sx, sy);
-        if (isStairs && state.stairsOpen) { ctx.globalAlpha = 0.35 + 0.25 * Math.sin(now / 200); ctx.fillStyle = '#ffd54f'; ctx.fillRect(sx + 2, sy + 2, 12, 12); ctx.globalAlpha = 1; }
-      } else if (this.touchesFloor(world, i, j)) {
-        walls.push({ d: j + 1, draw: () => this.drawWall(world, i, j, sx, sy, focus) });
+      const t = map.tiles[j * map.w + i];
+      if (world.walkable(i, j) && !world.doorAt(i, j)) {
+        const down = i === map.stairs.x && j === map.stairs.y, up = map.up && i === map.up.x && j === map.up.y;
+        ctx.drawImage(down ? TILES.stairs : up ? TILES.upStairs : this.groundImage(t, i, j), sx, sy);
+        if (down && state.stairsOpen) { ctx.globalAlpha = 0.35 + 0.25 * Math.sin(now / 200); ctx.fillStyle = '#ffd54f'; ctx.fillRect(sx + 2, sy + 2, 12, 12); ctx.globalAlpha = 1; }
+      } else if (map.town || this.touchesFloor(world, i, j)) {
+        if (t === 4) ctx.drawImage(TILES.grass[Math.floor(hash(i, j) * 4)], sx, sy); // grass shows between the trees
+        walls.push({ d: j + 1, draw: () => this.drawWall(world, t, i, j, sx, sy, focus) });
       }
+    }
+    for (const door of map.doors || []) {
+      walls.push({ d: door.y + 1.01, draw: () => { const p = this.toScreen(door.x + 0.5, door.y - 1); this.smallText(door.name, p.x, p.y - WALL_H + 4, '#ffd54f'); } });
     }
     return walls;
   }
+  groundImage(t, i, j) {
+    if (t === 2) return TILES.grass[Math.floor(hash(i, j) * 4)];
+    if (t === 3) return TILES.path[Math.floor(hash(i, j) * 2)];
+    return TILES.floor[Math.floor(hash(i, j) * 4)];
+  }
   touchesFloor(world, i, j) {
-    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if ((di || dj) && world.tileAt(i + di, j + dj)) return true;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if ((di || dj) && world.walkable(i + di, j + dj)) return true;
     return false;
   }
-  /** A wall block is raised by WALL_H: its top sits up the screen and its front face covers its own square. */
-  drawWall(world, i, j, sx, sy, focus) {
+  /** Which picture a raised block uses: dungeon wall, tree, or a piece of the house or the shop. */
+  blockImage(world, t, i, j) {
+    if (t === 4) return TILES.tree[Math.floor(hash(i, j) * 2)];
+    if (t === 5 || t === 7) { const b = TILES.house; return t === 7 ? b.door : hash(i, j + 3) > 0.5 ? b.window : b.plain; }
+    if (t === 6 || t === 8) { const b = TILES.shop; return t === 8 ? b.door : hash(i, j + 3) > 0.4 ? b.window : b.plain; }
+    return TILES.wall[Math.floor(hash(j, i) * 3)];
+  }
+  /** A raised block is WALL_H tall: its top sits up the screen and its front face covers its own square. */
+  drawWall(world, t, i, j, sx, sy, focus) {
     const { ctx } = this;
     const nearPlayer = j + 1 > focus.y && j - focus.y < 1.5 && Math.abs(i + 0.5 - focus.x) < 1.6;
     if (nearPlayer) ctx.globalAlpha = 0.45; // see-through when it stands in front of you
-    ctx.drawImage(TILES.wall[Math.floor(hash(j, i) * 3)], sx, sy - WALL_H);
-    ctx.fillStyle = '#7d7299'; const ty = sy - WALL_H; // light rim where the wall meets open floor
-    if (world.tileAt(i - 1, j)) ctx.fillRect(sx, ty, 1, TS);
-    if (world.tileAt(i + 1, j)) ctx.fillRect(sx + TS - 1, ty, 1, TS);
-    if (world.tileAt(i, j - 1)) ctx.fillRect(sx, ty, TS, 1);
-    if (world.tileAt(i, j + 1)) ctx.fillRect(sx, ty + TS - 1, TS, 1);
+    ctx.drawImage(this.blockImage(world, t, i, j), sx, sy - WALL_H);
+    if (t === 0) {
+      ctx.fillStyle = '#7d7299'; const ty = sy - WALL_H; // light rim where the wall meets open floor
+      if (world.walkable(i - 1, j)) ctx.fillRect(sx, ty, 1, TS);
+      if (world.walkable(i + 1, j)) ctx.fillRect(sx + TS - 1, ty, 1, TS);
+      if (world.walkable(i, j - 1)) ctx.fillRect(sx, ty, TS, 1);
+      if (world.walkable(i, j + 1)) ctx.fillRect(sx, ty + TS - 1, TS, 1);
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -147,7 +169,7 @@ export class Renderer {
   drawLighting(world, now) {
     const d = this.dctx;
     d.globalCompositeOperation = 'source-over';
-    d.clearRect(0, 0, VIEW_W, VIEW_H); d.fillStyle = 'rgba(6,4,12,0.9)'; d.fillRect(0, 0, VIEW_W, VIEW_H);
+    d.clearRect(0, 0, VIEW_W, VIEW_H); d.fillStyle = world.map.town ? 'rgba(10,8,30,0.45)' : 'rgba(6,4,12,0.9)'; d.fillRect(0, 0, VIEW_W, VIEW_H); // dusk on the surface
     d.globalCompositeOperation = 'destination-out';
     const light = (x, y, r, a) => {
       const sx = x * TS + this.ox, sy = y * TS + this.oy - 6;
@@ -157,6 +179,8 @@ export class Renderer {
     };
     for (const e of world.entities.values()) { const l = e.light; if (l) light(e.x, e.y, l.radius, l.strength); }
     if (world.state.stairsOpen) light(world.map.stairs.x + 0.5, world.map.stairs.y + 0.5, 60, 0.9);
+    if (world.map.up) light(world.map.up.x + 0.5, world.map.up.y + 0.5, 36, 0.7); // the way back up is always lit
+    for (const door of world.map.doors || []) light(door.x + 0.5, door.y + 0.6, 50, 0.8); // lanterns by the doors
     this.ctx.drawImage(this.dark, 0, 0);
   }
 

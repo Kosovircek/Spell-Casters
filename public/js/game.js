@@ -10,6 +10,7 @@ import { Particles } from './particles.js';
 import { EventEffects } from './effects.js';
 import { Hud } from './hud.js';
 import { InventoryMenu } from './inventory.js';
+import { StoreMenu } from './store.js';
 import { Input } from './input.js';
 import { TouchInput } from './touch.js';
 import { RingMenu } from './ring.js';
@@ -41,6 +42,11 @@ export class Game {
     this.hud = new Hud();
     this.effects = new EventEffects({ audio: this.audio, particles: this.particles, renderer: this.renderer, getMyId: () => this.myId });
     this.inventory = new InventoryMenu({ el: $('menu'), network: this.network, getMe: () => this.me, message: (t) => this.hud.message(t) });
+    this.doorKind = null; // the shop or house door my caster is walking into, if any
+    this.store = new StoreMenu({
+      el: $('menu'), network: this.network, getMe: () => this.me, inventory: this.inventory,
+      onOpen: () => { this.inventory.close(); this.ring?.close(); this.input.stopWalking(); },
+    });
     this.bell = new BellChant({ audio: this.audio, settings: this.settings });
     this.input = new Input(this);
     this.ring = new RingMenu(this);
@@ -75,7 +81,8 @@ export class Game {
     this.network
       .on('welcome', (m) => { this.myId = m.id; this.roomCode = m.room; this.hud.show(m.room, m.duel); if (m.duel) $('cheat').hidden = true; }) // the cheat sheet would cover one end of the duel platform (H shows it)
       .on('full', (m) => alert(`That room is full (${m.max || 4} players). Try another room name.`))
-      .on('map', (m) => { this.world.setMap(m); this.prediction.reset(); this.particles.clear(); this.hud.renderCheatSheet(m.pool); })
+      .on('map', (m) => { this.world.setMap(m); this.prediction.reset(); this.particles.clear(); this.hud.renderCheatSheet(m.pool); this.store.close(); this.doorKind = null; })
+      .on('store', (m) => { if (m.kind && m.kind !== this.doorKind) return; this.store.show(m); }) // ignore it if I already walked away
       .on('state', (m) => this.onState(m))
       .on('msg', (m) => this.hud.message(m.text))
       .on('close', () => { if (this.hud.visible) this.hud.banner('Disconnected. Refresh to rejoin.', 99999); });
@@ -96,6 +103,7 @@ export class Game {
     if (!state) return;
     this.hudState = null;
     this.inventory.refresh();
+    this.store.refresh();
     this.ring.refresh();
     this.announceItemsHere();
     this.hud.renderParty(state, this.myId);
@@ -113,6 +121,24 @@ export class Game {
     const how = this.touch.enabled ? 'tap the left side' : 'g';
     if (key && key !== this.lastSeenItems) this.hud.message(here.length === 1 ? `You see ${here[0].name}. (${how} to pick up)` : `You see ${here.length} items here. (${how} to pick them up)`);
     this.lastSeenItems = key;
+  }
+  /**
+   * On the surface, walking up to the shop's or the house's door opens it; walking away closes it.
+   * It opens a little before you touch the door and closes only once you are clearly away from it,
+   * so the small catch-up of my caster to the server's position never flickers it shut.
+   */
+  checkDoor() {
+    const me = this.world.ready ? this.world.player(this.myId) : null;
+    const doors = me && !me.data.dead && this.world.map.town ? this.world.map.doors : [];
+    const near = (d, reach) => Math.abs(me.x - (d.x + 0.5)) < reach && me.y - (d.y + 0.5) < reach + 0.2 && me.y > d.y;
+    const open = doors.find(d => d.kind === this.doorKind);
+    if (open && near(open, 1.4)) return; // still at the open door
+    const door = doors.find(d => near(d, 0.8));
+    const kind = door ? door.kind : null;
+    if (kind === this.doorKind) return;
+    this.doorKind = kind;
+    if (kind) this.network.command('enter', { kind });
+    else this.store.close();
   }
   /** Floor items close enough to pick up (same distance the server uses). */
   itemsHere() {
@@ -154,6 +180,7 @@ export class Game {
       hitboxes: this.settings.showHitboxes(!!world.map?.duel),
     });
     this.ring.place();
+    this.checkDoor();
     this.hud.renderHoldBar(this.morse, now);
     this.hud.banner(null);
   }

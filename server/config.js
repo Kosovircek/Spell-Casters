@@ -37,6 +37,19 @@ export const EFFECTS = {
   slowSeconds: 15,      // Scroll of Slow Time
   cloakRange: 4,        // tiles at which a cloak counters an incoming letter
   regenSeconds: 20,     // Amulet of Regeneration
+  travelSeconds: 5,     // Scroll of Recall and the descent scrolls: the party is carried away after this long
+};
+
+/** Floors deeper down get harder, but some numbers stop growing so a deep floor is not wall-to-wall enemies. */
+export const DEPTH = {
+  maxEnemies: 24,       // regular enemies on one floor (3 + 2 per floor until this)
+  maxExtraShots: 6,     // extra enemy letters allowed in the air at once (half the floor number until this)
+};
+
+export const GOLD = {
+  start: 100,           // a new caster's purse
+  perKill: 2,           // gold for a slime on floor 1; +1.5 per floor, x1.5 for mages, x10 for the Bellwraith
+  perChest: 8,          // gold in a chest per floor number
 };
 
 export const LEVELS = {

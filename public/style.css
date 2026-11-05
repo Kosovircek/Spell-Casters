@@ -153,3 +153,15 @@ body.touch #menu .tab.on { color: #ffd54f; border-color: #ffd54f; }
 body.touch #menu .row { min-height: 40px; display: flex; align-items: center; gap: 6px; padding: 0 6px; border-bottom: 1px solid #2a2236; }
 body.touch #menu .row[data-k]:active { background: #3a2f52; }
 body.touch #menu p { font-size: 13px; }
+
+/* ---- the shop and your house on the surface */
+#menu .tabs { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+#menu .tab { padding: 1px 8px; border: 1px solid #4b3d63; color: #9a8fb0; }
+#menu .tab.on { color: #ffd54f; border-color: #ffd54f; }
+#menu .srow { display: flex; justify-content: space-between; gap: 16px; }
+#menu .price { color: #ffd54f; white-space: nowrap; }
+#menu .price::after { content: ' g'; color: #9a8fb0; }
+#menu .price.dear { color: #8a6d6d; }
+#menu .gold { color: #ffd54f; }
+#menu { max-height: calc(100vh - 140px); overflow-y: auto; }
+.pl .gold { color: #ffd54f; }

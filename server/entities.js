@@ -8,7 +8,7 @@
 //      ├── Spell ── PlayerSpell
 //      │      └──── EnemySpell
 //      └── FloorItem
-import { DT, PLAYER, SPELL, LEVELS } from './config.js';
+import { DT, PLAYER, SPELL, LEVELS, GOLD } from './config.js';
 import { xpToNext, baseHp, armorFactor, letterDamage } from './progression.js';
 import { rnd, pick } from './util.js';
 import * as Items from './items.js';
@@ -101,6 +101,9 @@ export class Player extends Actor {
     this.draupnir = 0;                  // kills counted toward Draupnir's potion
     this.trail = [];                    // Horseshoes of Sleipnir: recent footsteps
     this.pack = [];                     // inventory a) .. l)
+    this.home = [];                     // what this caster keeps in their house on the surface
+    this.gold = GOLD.start;
+    this.onStairs = null;               // 'up' / 'down' while standing on stairs: you have to step onto them to use them
     this.missedEvents = [];             // events from states skipped while the connection was busy
     this.equip = Object.fromEntries(Items.SLOTS.map(k => [k, null]));
     this.refreshStats();
@@ -178,10 +181,18 @@ export class Player extends Actor {
 
   heal(n) { const before = this.hp; this.hp = Math.min(this.maxHp, this.hp + Math.round(n)); return this.hp - before; }
   revive(x, y) { this.dead = false; this.hp = Math.max(1, Math.round(this.maxHp * LEVELS.reviveShare)); this.x = x; this.y = y; }
-  /** Place at the start of a fresh floor. HP carries over; only the downed come back (at half HP). */
-  placeAt(room) {
-    const s = room.dungeon.start;
-    this.x = s.cx + rnd(-1, 1); this.y = s.cy + rnd(-1, 1);
+  /**
+   * Place on a floor the party just arrived on, near `at` (default: the middle of the start room).
+   * HP carries over; only the downed come back (at half HP).
+   */
+  placeAt(room, at = null) {
+    const dg = room.dungeon, s = at || { x: dg.start.cx, y: dg.start.cy };
+    for (let tries = 0; tries < 12; tries++) {
+      const spread = tries < 10 ? 0.8 : 0;
+      this.x = s.x + rnd(-spread, spread); this.y = s.y + rnd(-spread, spread);
+      if (!dg.blocked(this.x, this.y, this.radius) && !dg.stairsAt(this.x, this.y)) break;
+    }
+    this.onStairs = dg.stairsAt(this.x, this.y);
     this.refreshStats();
     if (this.dead) this.revive(this.x, this.y);
     this.pearlUsed = false; this.trail = [];
@@ -256,13 +267,15 @@ export class Player extends Actor {
 
   // ---- saving: what a player keeps when the lobby is saved and resumed
   toSave() {
-    return { name: this.name, x: this.x, y: this.y, hp: this.hp, dead: this.dead, level: this.level, xp: this.xp, kills: this.kills, blocks: this.blocks, ward: this.ward, pack: this.pack, equip: this.equip };
+    return { name: this.name, x: this.x, y: this.y, hp: this.hp, dead: this.dead, level: this.level, xp: this.xp, kills: this.kills, blocks: this.blocks, ward: this.ward, gold: this.gold, pack: this.pack, home: this.home, equip: this.equip };
   }
   /** Take back saved progress (matched by name when someone rejoins). Saves from before levelling start at level 1. */
   restore(s) {
     this.level = Math.max(1, Math.min(LEVELS.max, s.level | 0 || 1));
     this.xp = Math.max(0, s.xp | 0);
     this.pack = (s.pack || []).map(Items.restoreItem).filter(Boolean);
+    this.home = (s.home || []).map(Items.restoreItem).filter(Boolean);
+    if (Number.isFinite(s.gold)) this.gold = Math.max(0, Math.floor(s.gold)); // saves from before gold start with a new purse
     for (const k of Items.SLOTS) this.equip[k] = null;
     for (const k of Items.SLOTS) {
       const it = Items.restoreItem(s.equip?.[k]); if (!it) continue;
@@ -284,7 +297,7 @@ export class Player extends Actor {
       spd: round3(this.moveSpeed), // so the client can move its own caster straight away (prediction)
       lv: this.level, xp: this.xp, xpNext: this.level >= LEVELS.max ? 0 : xpToNext(this.level),
       hurt: this.hurt > 0, respawn: this.dead ? Math.max(0, Math.ceil((this.respawnAt - now) / 1000)) : 0,
-      kills: this.kills, blocks: this.blocks, hidden: this.vanishUntil > now,
+      kills: this.kills, blocks: this.blocks, hidden: this.vanishUntil > now, gold: this.gold,
       swift: this.swiftUntil > now ? Math.ceil((this.swiftUntil - now) / 1000) : 0, ward: this.ward,
       stats: {
         armor: st.armor, cut: Math.round((1 - armorFactor(st.armor)) * 100), speed: Math.round(this.moveSpeed / PLAYER.speed * 100),

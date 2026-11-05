@@ -63,6 +63,7 @@ export class RingMenu {
   open() {
     if (!this.built) this.build();
     this.game.inventory.close();
+    this.game.store.close();
     this.game.input.stopWalking();
     this.el.hidden = false;
     this.refresh();

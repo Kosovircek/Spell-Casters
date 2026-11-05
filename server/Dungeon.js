@@ -1,7 +1,14 @@
 import { MAP_W, MAP_H, HITBOX } from './config.js';
 import { rint } from './util.js';
 
-/** One generated floor: tile grid, rooms, start room and stairs, plus collision and path helpers. */
+/**
+ * Tile codes (sent to the client as one digit per tile). The dungeon only uses WALL and FLOOR;
+ * the surface town adds grass, paths, trees and buildings. Doors are walkable: stepping in opens the shop or your house.
+ */
+export const TILE = { WALL: 0, FLOOR: 1, GRASS: 2, PATH: 3, TREE: 4, HOUSE: 5, SHOP: 6, HOME_DOOR: 7, SHOP_DOOR: 8 };
+export const WALKABLE = new Set([TILE.FLOOR, TILE.GRASS, TILE.PATH, TILE.HOME_DOOR, TILE.SHOP_DOOR]);
+
+/** One generated floor: tile grid, rooms, start room, stairs down and up, plus collision and path helpers. */
 export class Dungeon {
   /** Pass `saved` (from toSave) to restore a floor instead of generating a new one. Subclasses may pick another size. */
   constructor(saved = null, size = { w: MAP_W, h: MAP_H }) {
@@ -13,12 +20,13 @@ export class Dungeon {
   }
 
   // ---- saving
-  toSave() { return { tiles: Array.from(this.tiles).join(''), rooms: this.rooms, stairs: this.stairs }; }
+  toSave() { return { tiles: Array.from(this.tiles).join(''), rooms: this.rooms, stairs: this.stairs, up: this.up }; }
   restore(saved) {
     this.tiles = Uint8Array.from(saved.tiles, c => +c);
     this.rooms = saved.rooms;
     this.start = this.rooms[0];
     this.stairs = saved.stairs;
+    this.up = saved.up || this.upStairsIn(this.start); // floors saved before stairs up existed get them now
   }
 
   // ---- generation: random rooms chained by 2-wide L-shaped corridors
@@ -45,7 +53,10 @@ export class Dungeon {
     this.start = order[0];
     const end = order[order.length - 1];
     this.stairs = { x: Math.floor(end.cx), y: Math.floor(end.cy) };
+    this.up = this.upStairsIn(this.start);
   }
+  /** Stairs up sit in the start room's top-left corner, away from its middle where the party arrives. */
+  upStairsIn(r) { return { x: r.x + 1, y: r.y + 1 }; }
   carve(x, y) { if (x > 0 && y > 0 && x < this.w - 1 && y < this.h - 1) this.tiles[y * this.w + x] = 1; }
   corridor(a, b) {
     const ax = Math.floor(a.cx), ay = Math.floor(a.cy), bx = Math.floor(b.cx), by = Math.floor(b.cy);
@@ -58,7 +69,7 @@ export class Dungeon {
   solid(x, y) {
     const i = Math.floor(x), j = Math.floor(y);
     if (i < 0 || j < 0 || i >= this.w || j >= this.h) return true;
-    return this.tiles[j * this.w + i] === 0;
+    return !WALKABLE.has(this.tiles[j * this.w + i]);
   }
   /** Would a circle of radius r at (x, y) overlap a wall? */
   blocked(x, y, r) { return this.solid(x - r, y - r) || this.solid(x + r, y - r) || this.solid(x - r, y + r) || this.solid(x + r, y + r); }
@@ -69,6 +80,23 @@ export class Dungeon {
     return true;
   }
   isStairs(x, y) { return Math.floor(x) === this.stairs.x && Math.floor(y) === this.stairs.y; }
+  /** 'down', 'up' or null for the tile under (x, y). */
+  stairsAt(x, y) {
+    const i = Math.floor(x), j = Math.floor(y);
+    if (this.stairs && i === this.stairs.x && j === this.stairs.y) return 'down';
+    if (this.up && i === this.up.x && j === this.up.y) return 'up';
+    return null;
+  }
+  /** A free spot next to (not on) the stairs down or up, where a party arriving by them appears. */
+  beside(which) {
+    const st = which === 'up' ? this.up : this.stairs;
+    if (!st) return { x: this.start.cx, y: this.start.cy };
+    for (const [ox, oy] of [[0, 1.5], [1.5, 0], [-1.5, 0], [0, -1.5], [1.5, 1.5], [-1.5, 1.5], [1.5, -1.5], [-1.5, -1.5]]) {
+      const x = st.x + 0.5 + ox, y = st.y + 0.5 + oy;
+      if (!this.blocked(x, y, 0.35) && !this.stairsAt(x, y)) return { x, y };
+    }
+    return { x: this.start.cx, y: this.start.cy };
+  }
 
   /** Breadth-first search over floor tiles (8-way, no corner cutting). Returns tile-centre waypoints, or undefined. */
   findPath(ax, ay, bx, by, maxLen) {
@@ -85,8 +113,8 @@ export class Dungeon {
         const nx = cx + ox, ny = cy + oy;
         if (nx < 0 || ny < 0 || nx >= this.w || ny >= this.h) continue;
         const n = ny * this.w + nx;
-        if (prev[n] !== -1 || !this.tiles[n]) continue;
-        if (ox && oy && (!this.tiles[cy * this.w + nx] || !this.tiles[ny * this.w + cx])) continue;
+        if (prev[n] !== -1 || !WALKABLE.has(this.tiles[n])) continue;
+        if (ox && oy && (!WALKABLE.has(this.tiles[cy * this.w + nx]) || !WALKABLE.has(this.tiles[ny * this.w + cx]))) continue;
         prev[n] = c; depth[n] = depth[c] + 1; q.push(n);
       }
     }
@@ -98,6 +126,6 @@ export class Dungeon {
 
   /** What the client needs to draw the floor. */
   toMessage(floor, pool) {
-    return { t: 'map', w: this.w, h: this.h, tiles: Array.from(this.tiles).join(''), floor, stairs: this.stairs, pool, hit: HITBOX };
+    return { t: 'map', w: this.w, h: this.h, tiles: Array.from(this.tiles).join(''), floor, stairs: this.stairs, up: this.up || null, pool, hit: HITBOX };
   }
 }

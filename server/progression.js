@@ -1,5 +1,5 @@
 // Levels, XP and damage numbers.
-import { LEVELS } from './config.js';
+import { LEVELS, GOLD } from './config.js';
 
 // Letter difficulty follows the floors' letter tiers: E T A N I M = 1 ... B C J P Q V X Y Z = 4.
 export const LETTER_VALUE = {};
@@ -26,3 +26,11 @@ export function letterDamage(enemyType, floor) {
 
 /** Share of damage that gets through this much armor: 25 -> 80%, 100 -> 50%. */
 export const armorFactor = (armor) => 100 / (100 + Math.max(0, armor));
+
+/** Gold for finishing an enemy of this type on this floor (roughly; a little random). */
+export function goldFor(enemyType, floor) {
+  const mult = { slime: 1, mage: 1.5, boss: 10 }[enemyType] || 1;
+  return Math.max(1, Math.round((GOLD.perKill + 1.5 * (floor - 1)) * mult * (0.6 + Math.random() * 0.8)));
+}
+/** Gold in a chest on this floor. */
+export const chestGold = (floor) => Math.round(GOLD.perChest * floor * (0.5 + Math.random()));

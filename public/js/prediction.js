@@ -22,7 +22,7 @@ export class Prediction {
 
   /** Is the circle of my caster at (x, y) inside a wall? Same test as Dungeon.blocked on the server. */
   blocked(x, y) {
-    const w = this.game.world, solid = (px, py) => w.tileAt(Math.floor(px), Math.floor(py)) === 0;
+    const w = this.game.world, solid = (px, py) => !w.walkable(Math.floor(px), Math.floor(py));
     return solid(x - RADIUS, y - RADIUS) || solid(x + RADIUS, y - RADIUS) || solid(x - RADIUS, y + RADIUS) || solid(x + RADIUS, y + RADIUS);
   }
 

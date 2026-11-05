@@ -49,6 +49,7 @@ export class TouchInput {
     document.body.classList.add('touch');
     this.game.hud.touchMode = true;
     this.game.inventory.touchMode = true;
+    this.game.store.touchMode = true;
     this.game.hud.renderMorse(this.game.morse);
     dispatchEvent(new Event('resize')); // the canvas fills the whole screen on touch devices
   }

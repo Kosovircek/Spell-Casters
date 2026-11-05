@@ -19,16 +19,18 @@ export class Input {
   onKeyDown(e) {
     const g = this.game;
     if (e.code === 'Escape' && g.ring?.isOpen) { g.ring.close(); e.preventDefault(); return; }
-    if (e.code === 'Escape' && g.hud.visible && !g.inventory.isOpen) { this.toggleSettings(); e.preventDefault(); return; }
+    if (e.code === 'Escape' && g.hud.visible && !g.inventory.isOpen && !g.store.isOpen) { this.toggleSettings(); e.preventDefault(); return; }
     if (!g.isPlaying()) return;
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS') { e.preventDefault(); g.network.save(); return; } // Ctrl+S saves, like Angband
 
     // Menus get first pick, except the numpad and Space so you can keep typing Morse and aiming,
     // and except movement keys while no menu is open.
+    // The shop or house screen, when open, takes the keys the inventory would.
     const isNumpadOrMorse = e.code.startsWith('Numpad') || e.code === 'Space';
-    if (!isNumpadOrMorse && !(!g.inventory.isOpen && MOVE_KEYS[e.code])) {
+    const menu = g.store.isOpen ? g.store : g.inventory;
+    if (!isNumpadOrMorse && !(!menu.isOpen && MOVE_KEYS[e.code])) {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (g.inventory.handleKey(e)) { e.preventDefault(); if (g.inventory.isOpen) this.stopWalking(); return; }
+      if (menu.handleKey(e)) { e.preventDefault(); if (menu.isOpen) this.stopWalking(); return; }
     }
 
     if (MORSE_KEYS.includes(e.code)) { e.preventDefault(); if (!e.repeat) { g.morse.press(performance.now()); g.audio.toneOn(); } return; }
