@@ -15,6 +15,7 @@ import { TouchInput } from './touch.js';
 import { RingMenu } from './ring.js';
 import { Lobby } from './lobby.js';
 import { BellChant } from './bell.js';
+import { Prediction } from './prediction.js';
 
 export class Game {
   constructor() {
@@ -22,6 +23,7 @@ export class Game {
     this.roomCode = '';
     this.lastFrame = performance.now();
     this.lastSeenItems = '';
+    this.hudState = null;  // newest state the HUD has not shown yet (drawn once per frame, not per message)
 
     // ---- setup
     this.settings = new Settings();
@@ -43,6 +45,7 @@ export class Game {
     this.input = new Input(this);
     this.ring = new RingMenu(this);
     this.touch = new TouchInput(this);
+    this.prediction = new Prediction(this);
     this.lobby = new Lobby((name, room, mode) => this.join(name, room, mode));
 
     this.settings.bindPanel(this.morse);
@@ -72,7 +75,7 @@ export class Game {
     this.network
       .on('welcome', (m) => { this.myId = m.id; this.roomCode = m.room; this.hud.show(m.room, m.duel); if (m.duel) $('cheat').hidden = true; }) // the cheat sheet would cover one end of the duel platform (H shows it)
       .on('full', (m) => alert(`That room is full (${m.max || 4} players). Try another room name.`))
-      .on('map', (m) => { this.world.setMap(m); this.particles.clear(); this.hud.renderCheatSheet(m.pool); })
+      .on('map', (m) => { this.world.setMap(m); this.prediction.reset(); this.particles.clear(); this.hud.renderCheatSheet(m.pool); })
       .on('state', (m) => this.onState(m))
       .on('msg', (m) => this.hud.message(m.text))
       .on('close', () => { if (this.hud.visible) this.hud.banner('Disconnected. Refresh to rejoin.', 99999); });
@@ -80,15 +83,25 @@ export class Game {
 
   onState(state) {
     this.world.applyState(state);
+    this.prediction.onServer(performance.now());
     const me = state.players.find(p => p.id === this.myId);
     if (me && me.stats) this.morse.maxLen = me.stats.letters; // some gear lets spells hold more letters
     for (const e of state.ev) this.effects.play(e);
+    this.hudState = state;
+  }
+
+  /** Menus and panels follow the newest state, once per frame: after a Wi-Fi hiccup several states can arrive at once. */
+  renderHud() {
+    const state = this.hudState;
+    if (!state) return;
+    this.hudState = null;
     this.inventory.refresh();
     this.ring.refresh();
     this.announceItemsHere();
     this.hud.renderParty(state, this.myId);
     if (state.duel) this.hud.renderDuel(state, this.myId); else this.hud.renderBoss(state);
     this.hud.banner(state.msg);
+    this.hud.renderPing(this.network.rtt);
   }
 
   /** Angband-style "You see a Potion of Healing." when you step onto items. */
@@ -119,12 +132,14 @@ export class Game {
 
   update(dt) {
     if (!this.world.ready) return;
+    this.prediction.update(dt, performance.now());
     this.world.update(dt);
     this.particles.update(dt);
     this.bell.update(this.world.boss, this.world.player(this.myId), performance.now());
   }
 
   render(now, dt) {
+    this.renderHud();
     const world = this.world;
     const me = world.ready ? world.player(this.myId) : null;
     const meData = this.me;

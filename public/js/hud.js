@@ -10,7 +10,8 @@ export class Hud {
   }
   show(roomCode, duel) {
     $('lobby').hidden = true; $('hud').hidden = false; $('touch').hidden = false;
-    $('roomcode').textContent = (duel ? 'Duel room: ' : 'Room: ') + roomCode + '  (share this page URL)';
+    this.roomLine = (duel ? 'Duel room: ' : 'Room: ') + roomCode + '  (share this page URL)';
+    $('roomcode').textContent = this.roomLine;
   }
   get visible() { return !$('hud').hidden; }
   toggleCheatSheet() { $('cheat').hidden = !$('cheat').hidden; }
@@ -33,18 +34,27 @@ export class Hud {
     $('msgline').innerHTML = this.messages.map(m => `<div>${escapeHtml(m.text)}</div>`).join('');
   }
 
+  /** Round trip to the server, next to the room name, so a slow connection is easy to spot. */
+  renderPing(rtt) {
+    if (!this.roomLine || !rtt) return;
+    const text = `${this.roomLine} · ping ${Math.round(rtt)} ms`;
+    if ($('roomcode').textContent !== text) $('roomcode').textContent = text;
+  }
+  /** Only touch the page when the HTML really changed (these panels are refreshed 20 times a second). */
+  setHtml(el, html) { if (el._html !== html) { el.innerHTML = html; el._html = html; } }
+
   // ---- party panel and floor info
   renderParty(state, myId) {
     const duel = state.duel;
     $('floor').textContent = duel ? `Duel · round ${duel.round || '-'} · first to ${duel.need} wins · H: Morse sheet`
       : 'Floor ' + state.floor + (state.stairsOpen ? '  - stairs open!' : '  - foes left: ' + state.enemies.length);
-    $('party').innerHTML = state.players.map(p =>
+    this.setHtml($('party'), state.players.map(p =>
       `<div class="pl" style="border-color:${p.color}"><b style="color:${p.color}">${escapeHtml(p.name)}${p.id === myId ? ' (you)' : ''}</b>` +
       (duel ? '' : ` <span class="lv">Lv ${p.lv}</span>`) +
       this.barsHtml(p, p.id === myId && !duel, duel) +
       (duel ? `<div class="stats">${p.wins} round${p.wins === 1 ? '' : 's'} won · ${p.blocks} letters blocked</div>`
         : `<div class="stats">${p.kills} defeated · ${p.blocks} blocked</div>` + this.effectsHtml(p)) + `</div>`).join('') +
-      (state.slow ? `<div class="pl" style="border-color:#ffd54f"><span class="fx">⌛ Enemy spells slowed ${state.slow}s</span></div>` : '');
+      (state.slow ? `<div class="pl" style="border-color:#ffd54f"><span class="fx">⌛ Enemy spells slowed ${state.slow}s</span></div>` : ''));
     const me = state.players.find(p => p.id === myId);
     $('dead').hidden = !(me && me.dead) || !!duel; // in a duel the round banner says it
     if (me && me.dead) $('dead').textContent = `You are down. Reviving next to a teammate in ${me.respawn}s...`;
@@ -87,7 +97,7 @@ export class Hud {
       roundover: winner ? `${winner.name} takes round ${d.round}` : '',
       over: winner ? `${winner.name} wins the duel! A new duel starts soon` : '',
     }[d.phase] || '';
-    el.innerHTML = `<div class="bn duelists">${side(bySide[0])}<span>VS</span>${side(bySide[1])}</div><div class="bh">${escapeHtml(how)}</div>`;
+    this.setHtml(el, `<div class="bn duelists">${side(bySide[0])}<span>VS</span>${side(bySide[1])}</div><div class="bh">${escapeHtml(how)}</div>`);
   }
 
   // ---- boss bar (bottom centre) while the Bellwraith is awake
@@ -100,7 +110,7 @@ export class Hud {
     const pips = Array.from({ length: b.phases }, (_, i) => `<span class="${i < b.phase ? 'gone' : i === b.phase ? 'cur' : ''}">◆</span>`).join('');
     const how = b.shield ? 'Bell shield up: cast the letter its bell rings'
       : `Shield broken for ${b.open}s: spell the Morse name above it`;
-    el.innerHTML = `<div class="bn">THE BELLWRAITH <span class="pips">${pips}</span></div><div class="bh ${b.shield ? 'sh' : 'op'}">${how}</div>`;
+    this.setHtml(el, `<div class="bn">THE BELLWRAITH <span class="pips">${pips}</span></div><div class="bh ${b.shield ? 'sh' : 'op'}">${how}</div>`);
   }
 
   // ---- Morse input box

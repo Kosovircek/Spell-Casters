@@ -17,16 +17,34 @@ import { MORSE } from './morse.js';
 export class Entity {
   constructor(data) {
     this.id = data.id;
-    this.x = data.x; this.y = data.y;        // smoothed position used for drawing
+    this.x = data.x; this.y = data.y;        // position used for drawing
     this.data = data;                        // latest snapshot from the server
+    this.samples = [];                       // recent { t (server time), x, y }, oldest first
+    this.local = null;                       // { x, y } predicted on this device (my own caster), drawn instead
   }
-  /** New snapshot from the server (20 times a second). */
-  sync(data) { this.data = data; }
-  /** Called every frame: glide toward the server position. */
-  update(dt) {
-    const k = 1 - Math.exp(-dt * 18);
-    this.x += (this.data.x - this.x) * k;
-    this.y += (this.data.y - this.y) * k;
+  /** New snapshot from the server (20 times a second); t is the server's time for it. */
+  sync(data, t) {
+    this.data = data;
+    if (t === undefined) return;
+    this.samples.push({ t, x: data.x, y: data.y });
+    if (this.samples.length > 12) this.samples.shift();
+  }
+  /**
+   * Called every frame. Draws everyone a little in the past (renderT, in server time) and slides between the
+   * two snapshots around that moment, so movement stays smooth even when Wi-Fi delivers snapshots unevenly.
+   */
+  update(dt, renderT) {
+    if (this.local) { this.x = this.local.x; this.y = this.local.y; return; }
+    const s = this.samples;
+    if (!s.length || renderT === undefined) { this.x = this.data.x; this.y = this.data.y; return; }
+    const last = s[s.length - 1];
+    if (renderT <= s[0].t || renderT >= last.t) { const e = renderT <= s[0].t ? s[0] : last; this.x = e.x; this.y = e.y; return; }
+    let i = s.length - 2;
+    while (i > 0 && s[i].t > renderT) i--;
+    const a = s[i], b = s[i + 1];
+    if (Math.hypot(b.x - a.x, b.y - a.y) > 3) { this.x = b.x; this.y = b.y; return; } // a teleport: no sliding across the map
+    const f = (renderT - a.t) / (b.t - a.t || 1);
+    this.x = a.x + (b.x - a.x) * f; this.y = a.y + (b.y - a.y) * f;
   }
   /** Draw order: things further down the screen are drawn later (in front). */
   get depth() { return this.y; }
@@ -44,9 +62,9 @@ export class Character extends Entity {
     this.moving = false;
     this.walkTime = 0;
   }
-  update(dt) {
+  update(dt, renderT) {
     const bx = this.x, by = this.y;
-    super.update(dt);
+    super.update(dt, renderT);
     if (dt <= 0) return;
     this.vx = this.vx * 0.8 + (this.x - bx) * TS / dt * 0.2;
     this.vy = this.vy * 0.8 + (this.y - by) * TS / dt * 0.2;

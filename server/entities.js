@@ -16,6 +16,7 @@ import * as Items from './items.js';
 let lastId = 0;
 export const newId = () => ++lastId;
 const round3 = (v) => +v.toFixed(3);
+const MAX_BACKLOG = 64 * 1024; // bytes waiting to go out on a socket before state updates are skipped
 
 // ------------------------------------------------------------------ base classes
 
@@ -100,6 +101,7 @@ export class Player extends Actor {
     this.draupnir = 0;                  // kills counted toward Draupnir's potion
     this.trail = [];                    // Horseshoes of Sleipnir: recent footsteps
     this.pack = [];                     // inventory a) .. l)
+    this.missedEvents = [];             // events from states skipped while the connection was busy
     this.equip = Object.fromEntries(Items.SLOTS.map(k => [k, null]));
     this.refreshStats();
     this.hp = this.maxHp;
@@ -107,6 +109,18 @@ export class Player extends Actor {
 
   // ---- networking
   send(obj) { if (this.ws.readyState === 1) this.ws.send(typeof obj === 'string' ? obj : JSON.stringify(obj)); }
+  /**
+   * Send this tick's world state. base is the state as JSON without its "ev" list (shared by all players).
+   * If this player's connection is still busy with earlier states (a slow device or a Wi-Fi hiccup), skip this
+   * one and keep its events for the next: piling up old states would make them fall further and further behind.
+   */
+  sendState(base, events) {
+    if (this.ws.readyState !== 1) return;
+    if (this.ws.bufferedAmount > MAX_BACKLOG) { this.missedEvents.push(...events); return; }
+    const ev = this.missedEvents.length ? this.missedEvents.concat(events) : events;
+    this.missedEvents = [];
+    this.ws.send(base.slice(0, -1) + ',"ev":' + JSON.stringify(ev) + '}');
+  }
   /** Angband-style message for this player only. */
   tell(text) { this.send({ t: 'msg', text }); }
   setMoveInput(x, y) { this.mx = Math.max(-1, Math.min(1, +x || 0)); this.my = Math.max(-1, Math.min(1, +y || 0)); }
@@ -267,6 +281,7 @@ export class Player extends Actor {
     const st = this.stats;
     return {
       ...super.snapshot(), name: this.name, color: this.color, hp: this.hp, maxHp: this.maxHp, dead: this.dead,
+      spd: round3(this.moveSpeed), // so the client can move its own caster straight away (prediction)
       lv: this.level, xp: this.xp, xpNext: this.level >= LEVELS.max ? 0 : xpToNext(this.level),
       hurt: this.hurt > 0, respawn: this.dead ? Math.max(0, Math.ceil((this.respawnAt - now) / 1000)) : 0,
       kills: this.kills, blocks: this.blocks, hidden: this.vanishUntil > now,
