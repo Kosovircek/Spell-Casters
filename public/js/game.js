@@ -2,6 +2,8 @@
 import { $ } from './constants.js';
 import { Settings } from './settings.js';
 import { AudioManager } from './audio.js';
+import { Music } from './music.js';
+import { Spell, Enemy } from './entities.js';
 import { MorseKey } from './morse.js';
 import { Network } from './network.js';
 import { World } from './world.js';
@@ -29,11 +31,12 @@ export class Game {
     // ---- setup
     this.settings = new Settings();
     this.audio = new AudioManager(this.settings);
+    this.music = this.audio.music = new Music(this.audio, this.settings);
     this.morse = new MorseKey({
       wpm: this.settings.wpm, gapUnits: this.settings.gap,
       onChange: () => { if (this.morse.bad) this.audio.play('bad'); this.hud.renderMorse(this.morse); },
     });
-    this.settings.onChange(s => { this.morse.wpm = s.wpm; this.morse.gapUnits = s.gap; this.hud.renderMorse(this.morse); });
+    this.settings.onChange(s => { this.music.applyVolume(); this.morse.wpm = s.wpm; this.morse.gapUnits = s.gap; this.hud.renderMorse(this.morse); });
 
     this.network = new Network();
     this.world = new World();
@@ -68,6 +71,7 @@ export class Game {
   join(name, room, mode) {
     this.roomCode = room;
     this.audio.context(); // unlock audio on this click
+    this.music.start();
     this.touch.goFullscreen();
     this.network.connect(name, room, mode);
   }
@@ -162,6 +166,29 @@ export class Game {
     this.world.update(dt);
     this.particles.update(dt);
     this.bell.update(this.world.boss, this.world.player(this.myId), performance.now());
+    this.music.update(dt, this.danger());
+  }
+
+  /**
+   * How much trouble I am in, for the music: low HP and hostile spells closing in, and most of all both at once.
+   * Scratches don't count; the first quarter of your HP is free.
+   */
+  danger() {
+    const map = this.world.map, me = this.world.player(this.myId), d = me?.data;
+    const mood = map.town ? 'town' : map.duel ? 'duel' : 'dungeon';
+    if (!d || d.dead) return { mood, danger: 0, hpLow: 0, dead: !!d?.dead };
+    const hpLow = Math.max(0, (1 - Math.max(0, d.hp) / d.maxHp - 0.25) / 0.75);
+    let threat = 0;
+    for (const e of this.world.entities.values()) {
+      const dist = Math.hypot(e.x - me.x, e.y - me.y);
+      if (e instanceof Spell) {
+        const hostile = e.data.o === 'e' || (map.duel && e.data.pid !== undefined && e.data.pid !== this.myId);
+        if (hostile && dist < 7) threat += 1 - dist / 7;
+      } else if (e instanceof Enemy && e.data.awake && dist < 6) threat += 0.3 * (1 - dist / 6);
+    }
+    const swarm = Math.min(1, threat / 3);
+    const boss = this.world.boss && !this.world.boss.data.dead ? 0.15 : 0;
+    return { mood, hpLow, dead: false, danger: Math.min(1, 0.4 * hpLow + 0.35 * swarm + 0.5 * hpLow * swarm + boss) };
   }
 
   render(now, dt) {

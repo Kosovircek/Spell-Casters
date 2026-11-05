@@ -24,7 +24,8 @@ Open http://localhost:3000, pick a name and a room name, and share the page URL 
 | Clear the spell | Numpad . |
 | Morse cheat sheet | H |
 | Show / hide hitboxes | B (on by default in duels; also in Settings) |
-| Settings (speed, letter pause, sound) | Esc |
+| Music on / off | M (volume in Settings) |
+| Settings (speed, letter pause, sound, music) | Esc |
 
 ### Touch (phones and tablets)
 
@@ -187,6 +188,16 @@ A plain Circlet of Insight (level 1) also drops: it shows the Morse code of the 
 
 Items stay with you between floors and when you go down. For testing, `FORCE_ITEM=m_svalinn npm start` makes every chest drop that item (ids are in `server/items.js`; common gear takes a material index, e.g. `FORCE_ITEM=c_helm:2` for a Steel Helm).
 
+## Music
+
+Original ambient music, generated live in the browser with Web Audio (no audio files). It is calm while you explore
+and grows more urgent as you get into trouble: your HP dropping below three quarters and hostile spells flying close
+to you, and most of all both at once. As danger rises the pad brightens, the tempo lifts, an arpeggio, a bass pulse
+and then drums fade in, and the chords turn darker. Low HP adds a heartbeat. It swells quickly and settles slowly.
+The surface town has a warm, quiet variant that never gets intense; duels start tense with a beat already going;
+a living Bellwraith adds a little extra edge. When you die it muffles until you respawn. The music dips while your
+own Morse tone sounds so every dot and dash stays clear. M mutes it; Settings has a volume slider.
+
 ## Saving lobbies
 
 A lobby (room) is saved on the server as `saves/<room>.json`: the current floor and the deepest one reached, the layout, chests and floor items of every floor visited, the enemies left on the current floor, the shop's shelf, and every player's level, XP, HP, gold, gear, pack, house and position. Saves from before persistent floors still load: their current floor becomes the first saved floor (with stairs up added), and every caster gets a starting purse of 100 gold. Saves from before levelling still load: those casters start at level 1, their old items turn into the closest new ones, and gear above their level goes into the pack.
@@ -246,6 +257,7 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `effects.js` | `EventEffects`: turns server events into sounds and particles |
 | `particles.js` | `Particles`: sparks and floating text |
 | `audio.js` | `AudioManager`: Morse tone and sound effects |
+| `music.js` | `Music`: generative ambient music that follows `Game.danger()` |
 | `settings.js` | `Settings`: saved preferences and the Esc panel |
 | `lobby.js` | `Lobby`: name and room screen |
 | `constants.js` | Screen size, key maps, small helpers |

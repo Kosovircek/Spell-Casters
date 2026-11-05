@@ -632,7 +632,7 @@ export class PlayerSpell extends Spell {
     const a = cur + turn;
     this.vx = Math.cos(a) * this.spd; this.vy = Math.sin(a) * this.spd;
   }
-  snapshot() { return { ...super.snapshot(), c: this.color }; }
+  snapshot() { return { ...super.snapshot(), c: this.color, pid: this.owner.id }; } // pid: whose spell (duel music)
 }
 
 // ------------------------------------------------------------------ floor item
