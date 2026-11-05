@@ -431,8 +431,8 @@ export class Room {
   }
 
   broadcastState(now) {
-    this.broadcast({
-      t: 'state', floor: this.floor, stairsOpen: this.stairsOpen,
+    const base = JSON.stringify({
+      t: 'state', ts: now, floor: this.floor, stairsOpen: this.stairsOpen,
       msg: this.banner && this.banner.until > now ? this.banner.text : null,
       slow: this.slowUntil > now ? Math.ceil((this.slowUntil - now) / 1000) : 0,
       players: [...this.players.values()].map(p => p.snapshot(now)),
@@ -440,8 +440,8 @@ export class Room {
       chests: this.chests.map(c => c.snapshot()),
       items: this.items.map(f => f.snapshot()),
       projs: this.spells.map(s => s.snapshot()),
-      ev: this.events,
     });
+    for (const pl of this.players.values()) pl.sendState(base, this.events);
     this.events = [];
   }
 }

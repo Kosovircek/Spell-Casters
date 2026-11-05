@@ -202,10 +202,11 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | --- | --- |
 | `main.js` | Entry point: `new Game().start()` |
 | `game.js` | **`Game` class**: creates every part, handles server messages, runs the main loop (`update` then `render`) |
-| `entities.js` | **OOP drawable objects** mirroring the server: `Entity` → `Character` → `Player`, `Enemy` (→ `Slime`, `Mage`, `Boss`); `Chest`; `Spell`; `FloorItem`. Each smooths its position and draws itself |
+| `entities.js` | **OOP drawable objects** mirroring the server: `Entity` → `Character` → `Player`, `Enemy` (→ `Slime`, `Mage`, `Boss`); `Chest`; `Spell`; `FloorItem`. Each slides between server snapshots (drawn 100 ms in the past, so uneven Wi-Fi stays smooth) and draws itself |
 | `world.js` | `World`: the tile map and all entities, kept in sync with server snapshots |
 | `renderer.js` | `Renderer`: camera, tiles and walls, depth sorting, lighting, drawing helpers; `renderDuel` for the duel arena |
-| `network.js` | `Network`: WebSocket connection, `on(type, fn)` subscriptions, `move` / `cast` / `command` |
+| `network.js` | `Network`: WebSocket connection, `on(type, fn)` subscriptions, `move` / `cast` / `command`, ping (shown next to the room name) |
+| `prediction.js` | `Prediction`: your own caster walks at once on your device (same speed and walls as the server) and is nudged back if the server disagrees, so players on other machines feel no input delay |
 | `input.js` | `Input`: keyboard handling for Morse, aiming, walking, menus |
 | `morse.js` | `MorseKey`: dot/dash timing and decoding |
 | `hud.js` | `Hud`: party panel, Morse box, banner, cheat sheet, message line |

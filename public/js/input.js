@@ -10,6 +10,7 @@ export class Input {
     this.held = new Set();     // movement keys currently down
     this.lastMove = '0,0';     // last movement vector sent, to avoid spamming the server
     this.touchMove = null;     // { x, y } from the touch joystick while a finger is on it
+    this.dir = { x: 0, y: 0 }; // the walking direction right now (my caster walks it at once, see prediction.js)
     addEventListener('keydown', (e) => this.onKeyDown(e));
     addEventListener('keyup', (e) => this.onKeyUp(e));
     addEventListener('blur', () => this.releaseAll());
@@ -64,6 +65,7 @@ export class Input {
     let ux = 0, uy = 0;
     for (const k of this.held) { ux += MOVE_KEYS[k][0]; uy += MOVE_KEYS[k][1]; }
     const d = this.touchMove || normalize(Math.sign(ux), Math.sign(uy));
+    this.dir = this.game.network.connected ? d : { x: 0, y: 0 };
     const key = d.x.toFixed(2) + ',' + d.y.toFixed(2);
     if (key !== this.lastMove && this.game.network.connected) { this.game.network.move(d.x, d.y); this.lastMove = key; }
   }

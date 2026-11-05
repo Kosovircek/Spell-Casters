@@ -285,18 +285,18 @@ export class DuelRoom {
   }
 
   broadcastState(now) {
-    this.broadcast({
-      t: 'state', floor: 0, stairsOpen: false, slow: 0,
+    const base = JSON.stringify({
+      t: 'state', ts: now, floor: 0, stairsOpen: false, slow: 0,
       msg: this.banner && this.banner.until > now ? this.banner.text : null,
       duel: {
         phase: this.phase, round: this.round, need: DUEL.winsNeeded, winner: this.lastWinner,
         count: this.phase === 'countdown' ? Math.max(1, Math.ceil((this.phaseUntil - now) / 1000)) : 0,
       },
-      players: [...this.players.values()].map(p => p.snapshot(now)),
+      players: [...this.players.values()].map(p => ({ ...p.snapshot(now), still: this.phase === 'countdown' })), // nobody walks during the countdown
       enemies: [], chests: [], items: [],
       projs: this.spells.map(s => s.snapshot()),
-      ev: this.events,
     });
+    for (const pl of this.players.values()) pl.sendState(base, this.events);
     this.events = [];
   }
 }

@@ -28,8 +28,10 @@ export class GameServer {
 
   onConnection(ws) {
     let room = null, player = null;
+    ws._socket?.setNoDelay(true); // send small updates at once instead of batching them (Nagle's algorithm)
     ws.on('message', (raw) => {
       let m; try { m = JSON.parse(raw); } catch { return; }
+      if (m.t === 'ping') return ws.send(JSON.stringify({ t: 'pong', c: m.c })); // the client measures its round trip
       if (m.t === 'join' && !player) {
         room = this.roomFor(m.room, m.mode);
         const max = room.maxPlayers || MAX_PLAYERS;
