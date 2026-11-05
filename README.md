@@ -25,7 +25,7 @@ Open http://localhost:3000, pick a name and a room name, and share the page URL 
 | Morse cheat sheet | H |
 | Show / hide hitboxes | B (on by default in duels; also in Settings) |
 | Music on / off | M (volume in Settings) |
-| Settings (speed, letter pause, sound, music) | Esc |
+| Menu: settings (speed, letter pause, sound, music), save and leave to the start menu, leave the duel arena | Esc |
 
 ### Touch (phones and tablets)
 
@@ -36,7 +36,7 @@ Hold the device sideways. The game goes full screen when you enter the dungeon (
 | Move | Put a finger anywhere on the **left half** and drag. The joystick appears where you touched, and you walk toward your finger (any angle, full speed) |
 | Tap Morse | Anywhere on the **right half**: short tap = dot, long press = dash (same timing as Numpad 5; the phone buzzes lightly when a press becomes a dash) |
 | Cast | Swipe on the right half; the spell flies in the swipe direction, snapped to the 8 numpad directions |
-| Settings | The ⚙ button, bottom right. "Vibrate on touch Morse" turns the buzz off |
+| Menu and settings | The ⚙ button, bottom right: back to the surface from the duel arena, save and quit, and "Vibrate on touch Morse" turns the buzz off |
 | Pick up | A quick **tap on the left half** (without dragging) picks up the items you are standing on |
 | Items | **Tap your own caster** (always in the middle of the screen) to open the ring menu around it. Segments: Pack, Wield, Gear (equipment), Potions, Scrolls and Stats (the character sheet, with your level on its badge). A number shows how many you have; greyed-out segments have nothing to act on. Tap a segment, then tap an item in the menu. Tap anywhere else to close the ring |
 
@@ -55,7 +55,7 @@ The menus are the same Angband-style ones as on the keyboard: every row is a but
 
 ## The surface and persistent floors
 
-A new game starts on **the surface**, a small village above the dungeon with your house, a shop and the stairs down to floor 1.
+A new game starts on **the surface**, a small village above the dungeon with your house, a shop, the duel arena and the stairs down to floor 1.
 
 - **Floors are persistent**, like in Angband. Every floor keeps its layout, its chests (opened or not) and every item lying on the ground when you leave it, also after the game is saved and loaded.
 - **Only the enemies come back.** Every time the party arrives on a floor it gets new enemies, as tough as that floor's depth (more of them, more letters, harder hits).
@@ -68,6 +68,7 @@ A new game starts on **the surface**, a small village above the dungeon with you
 - **Gold**: every caster starts with 100. Whoever finishes an enemy gets a little gold (more deeper down, x1.5 for mages, x10 for the Bellwraith), and whoever opens a chest gets some too. It shows in the party panel and on the character sheet.
 - **The shop** (Dot & Dash Goods, the blue roof): walk up to its door to open it. Tabs: *Potions & scrolls*, *Weapons*, *Armour* (Bronze and Iron gear) and *Sell*. The shop buys anything from your pack for a third of its price. Things it does not stock itself (better gear, mythic items) stay on its shelf, marked "sold by a caster", so they can be bought back.
 - **Your house** (the red roof): every caster has their own, with room for 24 items. Tabs: *Your house* (take things out) and *Your pack* (leave things there). It is kept in the save with the rest of your caster.
+- **The Duel Arena** (the open stone ring with moon banners): walk through its gate to duel a caster from your party, see *Duel room*.
 - Keys in both: a letter picks an item, then **y** (or Enter) buys, sells, takes or stores it. **Tab**, **← →** or **1-4** switch tabs. **Esc** leaves. On touch screens tap the tabs and items; walking away closes the screen.
 
 | Item | Price | What it does |
@@ -103,7 +104,9 @@ Every floor has a boss, the Bellwraith, guarding the stairs room. The stairs onl
 
 ## Duel room (2 players)
 
-On the start screen, type a room name and click **Duel a friend**. The page URL (`?room=...&mode=duel`) is the invite link: your friend opens it and presses **Join the duel**. Duel rooms are separate from dungeon rooms, even with the same name, and hold exactly two casters (anyone else gets "room full").
+The **Duel Arena** stands on the surface, to the right of the village square. Walk through its gate and you are in your party's duel room; when a second caster from the same room walks in, the duel starts. The arena holds two casters: a third is told it is busy and stays outside. **Esc → Back to the surface** puts you in front of the gate again (if the party went down meanwhile, you join them on their floor).
+
+Your co-op caster is saved as you walk in and comes back exactly as it was: levels and gear do not count in the arena, and nothing that happens there changes them.
 
 - You face each other from the two ends of a long, narrow platform floating in the night sky, inlaid with silver crescent moons and gold stars.
 - **Any letter goes**, A to Z. Spells fly at 4 tiles per second, slow enough to read what is coming. Aimed at the other caster they only **bend a little** (at most about 11°, and not at all in the last 5 tiles), so they do not track you: step aside and they miss.
@@ -111,7 +114,7 @@ On the start screen, type a room name and click **Duel a friend**. The page URL 
 - **Blocking works like against enemies**: when two spells meet, matching first letters cancel each other, letter by letter. Cast `T` at an incoming `TEA` and only `EA` keeps coming; cast `TEA` and both spells vanish. Whatever is left of a spell after a block flies on.
 - **Words are what hurt.** Damage = the letters' Morse difficulty (E T A N I M = 1, S O U R D K = 2, G W H L F = 3, the rest = 4) × half the length: `E` = 1, `TEA` = 5, `MOON` = 12, `GHOST` = 28, `SHADOW` = 39. So countering just the start of a long word takes most of its sting away (`SHADOW` blocked down to `DOW` does 11). Both casters have 50 HP; dungeon levels and gear do not count, and nothing regenerates.
 - **Rounds**: a 3 second countdown (you cannot move or cast), then fight. First to win 3 rounds wins the duel, then a new duel starts by itself. While you wait for an opponent you can walk around and practise casting.
-- Items commands do nothing in a duel, and duels are never saved. All duel numbers are in `DUEL` in `server/config.js`.
+- Items commands do nothing in a duel, and duels are never saved (your co-op progress stays saved outside). All duel numbers are in `DUEL` in `server/config.js`.
 
 ## Chests, items and equipment (Angband-style)
 
@@ -223,9 +226,9 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `index.js` | Entry point: starts the web server and the game server |
 | `StaticServer.js` | Serves the `public/` folder |
 | `GameServer.js` | **Networking**: WebSocket connections, rooms, routing messages (`join`, `move`, `cast`, `cmd`) |
-| `DuelRoom.js` | **The duel room**: `Arena` (the platform, a `Dungeon` subclass), `DuelPlayer`, `DuelSpell`, rounds and spell-vs-spell blocking |
+| `DuelRoom.js` | **The duel room** (each co-op room has one; `GameServer.enterArena` / `leaveArena` move a caster in and out on the same connection): `Arena` (the platform, a `Dungeon` subclass), `DuelPlayer`, `DuelSpell`, rounds and spell-vs-spell blocking |
 | `Room.js` | **One co-op game**: keeps every visited floor (`levels`), moves the party between floors (`enterFloor`: stairs, recall and descent scrolls, wipes), runs `tick()` (update entities, collisions, stairs, wipe), casting and targeting, broadcasts state |
-| `Town.js` | `Town`: the surface village (a fixed `Dungeon` subclass with the house, the shop, their doors and the stairs down) |
+| `Town.js` | `Town`: the surface village (a fixed `Dungeon` subclass with the house, the shop, the duel arena, their doors and the stairs down) |
 | `Shop.js` | `Shop`: the shop's stock, buying, selling and its shelf of resold items, and every caster's house storage |
 | `entities.js` | **OOP game objects**: `Entity` → `Actor` → `Player`, `Enemy` (→ `Slime`, `Mage`, `Boss`); `Chest`; `Spell` (→ `PlayerSpell`, `EnemySpell`); `FloorItem`; and `WordLock` (the spell-the-word rule shared by enemies and chests) |
 | `Dungeon.js` | Tile codes, map generation with stairs down and up, plus collision, line of sight and path finding |
@@ -261,4 +264,4 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `settings.js` | `Settings`: saved preferences and the Esc panel |
 | `lobby.js` | `Lobby`: name and room screen |
 | `constants.js` | Screen size, key maps, small helpers |
-| `art/` | Procedural pixel art: `canvas.js` (helpers), `font.js`, `sprites.js`, `tiles.js` (dungeon, stairs up and down, and the village's grass, paths, trees and buildings), `arena.js` (the duel platform and starry sky) |
+| `art/` | Procedural pixel art: `canvas.js` (helpers), `font.js`, `sprites.js`, `tiles.js` (dungeon, stairs up and down, and the village's grass, paths, trees, buildings and duel arena), `arena.js` (the duel platform and starry sky) |

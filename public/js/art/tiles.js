@@ -114,6 +114,59 @@ function buildingTile(kind, front) {
   return c;
 }
 
+/**
+ * The duel arena: an open-air ring of pale stone. From above you see its rim (crenellated stone) around a
+ * sandy fighting floor; the front wall has arches and moon banners, and the gate is a big arch with a raised
+ * portcullis and a crescent moon over it.
+ * top: 'rim' or 'sand'; front: 'plain', 'arch', 'banner' or 'gate'.
+ */
+function arenaTile(top, front) {
+  const stone = ['#c8bfa8', '#a99f88', '#7a7060', '#e2dac4'];
+  const c = makeCanvas(TS, TS + WALL_H); const g = c.getContext('2d');
+  for (let py = 0; py < TS; py++) for (let px = 0; px < TS; px++) {
+    const n = hash(px + 71, py + (top === 'sand' ? 13 : 37));
+    let col;
+    if (top === 'sand') col = n < 0.1 ? '#b8975e' : n > 0.92 ? '#e6cc94' : '#d4b67c';
+    else {
+      const merlon = (Math.floor(px / 4) + Math.floor(py / 4)) % 2 === 0; // raised stones in a checker: battlements
+      col = merlon ? (n > 0.85 ? stone[3] : stone[0]) : (n > 0.85 ? stone[1] : stone[2]);
+      if (merlon && (px % 4 === 0 || py % 4 === 0)) col = stone[3]; // lit top-left edge of each raised stone
+    }
+    g.fillStyle = col; g.fillRect(px, py, 1, 1);
+  }
+  // the front wall: big stone blocks
+  for (let py = 0; py < WALL_H; py++) for (let px = 0; px < TS; px++) {
+    const row = Math.floor(py / 4), bx = px + (row % 2) * 4;
+    let col = hash(px + 3, py + 81) > 0.9 ? stone[3] : stone[0];
+    if (py % 4 === 3 || bx % 8 === 0) col = stone[2];
+    if (py === 0) col = stone[3];
+    g.fillStyle = col; g.fillRect(px, TS + py, 1, 1);
+  }
+  const y0 = TS;
+  if (front === 'arch') { // a dark arched opening
+    g.fillStyle = stone[2]; g.fillRect(4, y0 + 3, 8, WALL_H - 3); g.fillRect(5, y0 + 2, 6, 1);
+    g.fillStyle = '#1a1424'; g.fillRect(5, y0 + 4, 6, WALL_H - 4); g.fillRect(6, y0 + 3, 4, 1);
+  }
+  if (front === 'banner') { // a purple banner with a gold crescent moon
+    g.fillStyle = '#3a2350'; g.fillRect(5, y0 + 1, 6, 9);
+    g.fillStyle = '#6a3f8f'; g.fillRect(5, y0 + 1, 6, 8); g.fillRect(6, y0 + 9, 4, 1); g.fillRect(7, y0 + 10, 2, 1);
+    g.fillStyle = '#ffd54f'; g.fillRect(7, y0 + 3, 2, 1); g.fillRect(6, y0 + 4, 1, 3); g.fillRect(7, y0 + 7, 2, 1);
+    g.fillStyle = '#8b5a2b'; g.fillRect(4, y0, 8, 1); // the pole
+  }
+  if (front === 'gate') { // a tall arch, the portcullis raised into it
+    g.fillStyle = stone[2]; g.fillRect(2, y0, 12, WALL_H); g.fillRect(3, y0 - 1, 10, 1);
+    g.fillStyle = '#120d1a'; g.fillRect(3, y0 + 2, 10, WALL_H - 2); g.fillRect(4, y0 + 1, 8, 1);
+    g.fillStyle = '#4a4560'; for (let k = 0; k < 5; k++) g.fillRect(4 + k * 2, y0 + 1, 1, 4); // portcullis bars
+    g.fillRect(4, y0 + 2, 9, 1); g.fillRect(4, y0 + 4, 9, 1);
+    g.fillStyle = '#8f8ba3'; for (let k = 0; k < 5; k++) g.fillRect(4 + k * 2, y0 + 5, 1, 1); // its spikes
+    g.fillStyle = '#d4b67c'; g.fillRect(3, y0 + WALL_H - 2, 10, 2); // sand spills out of the gate
+    // a gold crescent moon carved over the gate (on the rim above it)
+    g.fillStyle = '#ffd54f'; g.fillRect(7, TS - 6, 3, 1); g.fillRect(6, TS - 5, 1, 3); g.fillRect(7, TS - 2, 3, 1);
+    g.fillStyle = '#c79100'; g.fillRect(7, TS - 5, 1, 1); g.fillRect(7, TS - 3, 1, 1);
+  }
+  return c;
+}
+
 export const TILES = {
   floor: [0, 1, 2, 3].map(v => floorTile(v, false)),
   stairs: floorTile(0, true),
@@ -124,4 +177,9 @@ export const TILES = {
   tree: [0, 1].map(v => treeTile(v)),
   house: { plain: buildingTile('house', null), window: buildingTile('house', 'window'), door: buildingTile('house', 'door') },
   shop: { plain: buildingTile('shop', null), window: buildingTile('shop', 'window'), door: buildingTile('shop', 'door') },
+  arena: {
+    sand: arenaTile('sand', 'plain'),
+    rim: { plain: arenaTile('rim', 'plain'), arch: arenaTile('rim', 'arch'), banner: arenaTile('rim', 'banner') },
+    gate: arenaTile('rim', 'gate'),
+  },
 };

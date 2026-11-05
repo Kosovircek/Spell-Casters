@@ -200,7 +200,8 @@ export class Room {
   }
 
   // ------------------------------------------------------------------ players
-  addPlayer(ws, name) {
+  /** opts.fromArena: coming back out of the duel arena, so stand in front of its gate. */
+  addPlayer(ws, name, opts = {}) {
     const used = new Set([...this.players.values()].map(p => p.color));
     const pl = new Player(ws, name, PLAYER.colors.find(c => !used.has(c)) || PLAYER.colors[0]);
     const buddy = this.alivePlayers[0];
@@ -212,10 +213,16 @@ export class Room {
       if (!Number.isFinite(saved.x) || this.dungeon.blocked(pl.x, pl.y, pl.radius)) { pl.placeAt(this); pl.restore({ ...saved, x: pl.x, y: pl.y }); }
       delete this.savedPlayers[pl.name.toLowerCase()];
     }
+    if (opts.fromArena && this.town) { pl.x = this.dungeon.arenaExit.x; pl.y = this.dungeon.arenaExit.y; }
     pl.onStairs = this.dungeon.stairsAt(pl.x, pl.y);
     this.players.set(pl.id, pl);
     pl.send({ t: 'welcome', id: pl.id, room: this.code });
     pl.send(this.dungeon.toMessage(this.floor, this.pool));
+    if (opts.fromArena) {
+      this.say(`${pl.name} is back from the arena`, 2);
+      if (!this.town) pl.tell(`Your party went down to floor ${this.floor} while you were duelling: you join them there.`);
+      return pl;
+    }
     this.say(saved ? `${pl.name} is back` : `${pl.name} joined`, 2);
     if (saved) pl.tell('Welcome back! Your gear was saved.');
     return pl;

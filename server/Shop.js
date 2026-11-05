@@ -40,7 +40,7 @@ export class Shop {
   /** m = { c, kind?, ref?, i? } from the client. Every command needs you standing in the right door. */
   run(pl, m) {
     const kind = m.c === 'enter' ? m.kind : ['buy', 'sell'].includes(m.c) ? 'shop' : 'home';
-    if (pl.dead) return;
+    if (pl.dead || !['home', 'shop'].includes(kind)) return;
     if (!this.room.dungeon.doorNear || !this.room.dungeon.doorNear(pl.x, pl.y, kind)) return pl.send({ t: 'store', kind: null });
     if (m.c === 'buy') this.buy(pl, String(m.ref || ''));
     if (m.c === 'sell') this.sell(pl, pl.pack[m.i]);

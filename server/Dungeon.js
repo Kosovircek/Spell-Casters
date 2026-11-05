@@ -2,11 +2,14 @@ import { MAP_W, MAP_H, HITBOX } from './config.js';
 import { rint } from './util.js';
 
 /**
- * Tile codes (sent to the client as one digit per tile). The dungeon only uses WALL and FLOOR;
- * the surface town adds grass, paths, trees and buildings. Doors are walkable: stepping in opens the shop or your house.
+ * Tile codes (sent to the client as one base-36 character per tile). The dungeon only uses WALL and FLOOR;
+ * the surface town adds grass, paths, trees and buildings. Doors are walkable: stepping in opens the shop or your house, or takes you into the duel arena.
  */
-export const TILE = { WALL: 0, FLOOR: 1, GRASS: 2, PATH: 3, TREE: 4, HOUSE: 5, SHOP: 6, HOME_DOOR: 7, SHOP_DOOR: 8 };
-export const WALKABLE = new Set([TILE.FLOOR, TILE.GRASS, TILE.PATH, TILE.HOME_DOOR, TILE.SHOP_DOOR]);
+export const TILE = { WALL: 0, FLOOR: 1, GRASS: 2, PATH: 3, TREE: 4, HOUSE: 5, SHOP: 6, HOME_DOOR: 7, SHOP_DOOR: 8, ARENA: 9, ARENA_DOOR: 10 };
+/** Tiles travel as one character each: 0-9, then a, b... (base 36), so old all-digit saves still load. */
+const encodeTiles = (tiles) => Array.from(tiles, t => t.toString(36)).join('');
+
+export const WALKABLE = new Set([TILE.FLOOR, TILE.GRASS, TILE.PATH, TILE.HOME_DOOR, TILE.SHOP_DOOR, TILE.ARENA_DOOR]);
 
 /** One generated floor: tile grid, rooms, start room, stairs down and up, plus collision and path helpers. */
 export class Dungeon {
@@ -20,9 +23,9 @@ export class Dungeon {
   }
 
   // ---- saving
-  toSave() { return { tiles: Array.from(this.tiles).join(''), rooms: this.rooms, stairs: this.stairs, up: this.up }; }
+  toSave() { return { tiles: encodeTiles(this.tiles), rooms: this.rooms, stairs: this.stairs, up: this.up }; }
   restore(saved) {
-    this.tiles = Uint8Array.from(saved.tiles, c => +c);
+    this.tiles = Uint8Array.from(saved.tiles, c => parseInt(c, 36));
     this.rooms = saved.rooms;
     this.start = this.rooms[0];
     this.stairs = saved.stairs;
@@ -126,6 +129,6 @@ export class Dungeon {
 
   /** What the client needs to draw the floor. */
   toMessage(floor, pool) {
-    return { t: 'map', w: this.w, h: this.h, tiles: Array.from(this.tiles).join(''), floor, stairs: this.stairs, up: this.up || null, pool, hit: HITBOX };
+    return { t: 'map', w: this.w, h: this.h, tiles: encodeTiles(this.tiles), floor, stairs: this.stairs, up: this.up || null, pool, hit: HITBOX };
   }
 }

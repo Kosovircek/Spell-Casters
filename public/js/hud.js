@@ -10,7 +10,7 @@ export class Hud {
   }
   show(roomCode, duel) {
     $('lobby').hidden = true; $('hud').hidden = false; $('touch').hidden = false;
-    this.roomLine = (duel ? 'Duel room: ' : 'Room: ') + roomCode + '  (share this page URL)';
+    this.roomLine = duel ? `Duel arena of room ${roomCode}  (Esc to leave)` : `Room: ${roomCode}  (share this page URL)`;
     $('roomcode').textContent = this.roomLine;
   }
   get visible() { return !$('hud').hidden; }
@@ -93,7 +93,7 @@ export class Hud {
     };
     const winner = state.players.find(p => p.id === d.winner);
     const how = {
-      waiting: 'Waiting for an opponent: share this page link. Practise your casting meanwhile.',
+      waiting: 'Waiting for another caster from your party to walk into the arena. Practise your casting meanwhile.',
       countdown: `Round ${d.round} starts in ${d.count}...`,
       fight: 'Cast the same letters at an incoming spell to block it',
       roundover: winner ? `${winner.name} takes round ${d.round}` : '',
