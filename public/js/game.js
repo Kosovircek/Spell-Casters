@@ -43,7 +43,7 @@ export class Game {
     this.input = new Input(this);
     this.ring = new RingMenu(this);
     this.touch = new TouchInput(this);
-    this.lobby = new Lobby((name, room) => this.join(name, room));
+    this.lobby = new Lobby((name, room, mode) => this.join(name, room, mode));
 
     this.settings.bindPanel(this.morse);
     $('close-settings').onclick = () => this.input.toggleSettings();
@@ -56,11 +56,11 @@ export class Game {
     requestAnimationFrame((t) => this.loop(t));
   }
 
-  join(name, room) {
+  join(name, room, mode) {
     this.roomCode = room;
     this.audio.context(); // unlock audio on this click
     this.touch.goFullscreen();
-    this.network.connect(name, room);
+    this.network.connect(name, room, mode);
   }
 
   /** My own player snapshot (pack, equipment, hp...). */
@@ -70,8 +70,8 @@ export class Game {
   // ------------------------------------------------------------------ server messages
   listen() {
     this.network
-      .on('welcome', (m) => { this.myId = m.id; this.roomCode = m.room; this.hud.show(m.room); })
-      .on('full', () => alert('That room is full (4 players). Try another room name.'))
+      .on('welcome', (m) => { this.myId = m.id; this.roomCode = m.room; this.hud.show(m.room, m.duel); if (m.duel) $('cheat').hidden = true; }) // the cheat sheet would cover one end of the duel platform (H shows it)
+      .on('full', (m) => alert(`That room is full (${m.max || 4} players). Try another room name.`))
       .on('map', (m) => { this.world.setMap(m); this.particles.clear(); this.hud.renderCheatSheet(m.pool); })
       .on('state', (m) => this.onState(m))
       .on('msg', (m) => this.hud.message(m.text))
@@ -87,7 +87,7 @@ export class Game {
     this.ring.refresh();
     this.announceItemsHere();
     this.hud.renderParty(state, this.myId);
-    this.hud.renderBoss(state);
+    if (state.duel) this.hud.renderDuel(state, this.myId); else this.hud.renderBoss(state);
     this.hud.banner(state.msg);
   }
 
@@ -135,6 +135,7 @@ export class Game {
       morse: this.morse,
       particles: this.particles,
       insight: !!meData?.stats?.fx?.includes('insight'), // Circlet of Insight or the Eye of Odin
+      duel: !!world.map?.duel,
     });
     this.ring.place();
     this.hud.renderHoldBar(this.morse, now);

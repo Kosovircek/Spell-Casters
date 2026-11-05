@@ -2,6 +2,7 @@
 import { VIEW_W, VIEW_H, TS, WALL_H, AIM_KEYS } from './constants.js';
 import { makeCanvas, hash } from './art/canvas.js';
 import { TILES } from './art/tiles.js';
+import { arenaPlatform, arenaSky, drawTwinkles } from './art/arena.js';
 import { MORSE } from './morse.js';
 
 export class Renderer {
@@ -36,6 +37,7 @@ export class Renderer {
     const { ctx } = this, { world, focus, now, dt } = view;
     ctx.fillStyle = '#0b0910'; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     if (!world.ready) return this.drawTitle(now);
+    if (world.map.duel) return this.renderDuel(view);
 
     this.shake = Math.max(0, this.shake - dt * 30);
     this.ox = Math.round(VIEW_W / 2 - focus.x * TS + (Math.random() - 0.5) * this.shake);
@@ -49,6 +51,29 @@ export class Renderer {
     view.particles.draw(ctx, this.ox, this.oy);
     this.drawLighting(world, now);
     this.drawStairsArrow(world);
+  }
+
+  /** The duel arena: a fixed camera on the platform, a starry sky behind it and no darkness. */
+  renderDuel(view) {
+    const { ctx } = this, { world, now, dt } = view, map = world.map, p = map.platform;
+    if (this.arenaFor !== map) { // pre-render the platform and the sky once per arena
+      this.arenaFor = map;
+      this.arenaImg = arenaPlatform(p);
+      this.skyImg = arenaSky(VIEW_W, VIEW_H);
+    }
+    this.shake = Math.max(0, this.shake - dt * 30);
+    this.ox = Math.round(VIEW_W / 2 - (p.x + p.w / 2) * TS + (Math.random() - 0.5) * this.shake);
+    this.oy = Math.round(VIEW_H / 2 - (p.y + p.h / 2) * TS - WALL_H / 2 + (Math.random() - 0.5) * this.shake);
+    ctx.drawImage(this.skyImg, 0, 0);
+    const px = p.x * TS + this.ox, py = p.y * TS + this.oy;
+    drawTwinkles(ctx, VIEW_W, VIEW_H, now, { x: px, y: py, w: p.w * TS, h: p.h * TS + WALL_H });
+    // a soft glow under the platform, as if it hangs in moonlight
+    ctx.fillStyle = 'rgba(120,130,220,0.06)';
+    for (let k = 0; k < 4; k++) ctx.fillRect(px + 6 + k * 3, py + p.h * TS + WALL_H + k * 2, p.w * TS - 12 - k * 6, 2);
+    ctx.drawImage(this.arenaImg, px, py);
+    const ents = [...world.entities.values()].sort((a, b) => a.depth - b.depth);
+    for (const e of ents) e.draw(this, view);
+    view.particles.draw(ctx, this.ox, this.oy);
   }
 
   /** Floors are drawn right away; walls are returned so they sort with entities (a wall can hide you). */

@@ -2,19 +2,25 @@
 import { WebSocketServer } from 'ws';
 import { MAX_PLAYERS } from './config.js';
 import { Room } from './Room.js';
+import { DuelRoom } from './DuelRoom.js';
 
 export class GameServer {
   constructor(httpServer, store) {
     this.store = store;     // SaveStore for lobbies
-    this.rooms = new Map(); // room code -> Room
+    this.rooms = new Map(); // room code -> Room (duel rooms are kept under "duel:" + code)
     this.wss = new WebSocketServer({ server: httpServer, path: '/ws' });
     this.wss.on('connection', (ws) => this.onConnection(ws));
   }
 
-  roomFor(rawCode) {
+  /** The co-op room with this code, or the duel room when mode is 'duel' (same codes, separate rooms). */
+  roomFor(rawCode, mode) {
     const code = String(rawCode || 'lobby').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 20) || 'lobby';
-    if (!this.rooms.has(code)) this.rooms.set(code, new Room(code, (room) => this.rooms.delete(room.code), this.store));
-    return this.rooms.get(code);
+    const duel = mode === 'duel', key = (duel ? 'duel:' : '') + code;
+    if (!this.rooms.has(key)) {
+      const onEmpty = () => this.rooms.delete(key);
+      this.rooms.set(key, duel ? new DuelRoom(code, onEmpty) : new Room(code, onEmpty, this.store));
+    }
+    return this.rooms.get(key);
   }
 
   /** Save every running lobby (used when the server shuts down). */
@@ -25,8 +31,9 @@ export class GameServer {
     ws.on('message', (raw) => {
       let m; try { m = JSON.parse(raw); } catch { return; }
       if (m.t === 'join' && !player) {
-        room = this.roomFor(m.room);
-        if (room.players.size >= MAX_PLAYERS) { ws.send(JSON.stringify({ t: 'full' })); return ws.close(); }
+        room = this.roomFor(m.room, m.mode);
+        const max = room.maxPlayers || MAX_PLAYERS;
+        if (room.players.size >= max) { ws.send(JSON.stringify({ t: 'full', max })); room = null; return ws.close(); }
         player = room.addPlayer(ws, String(m.name || ''));
         return;
       }

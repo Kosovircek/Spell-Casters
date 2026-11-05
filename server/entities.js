@@ -559,6 +559,10 @@ export class PlayerSpell extends Spell {
     this.aim = null;        // point it is steering toward right now
   }
   get fromPlayer() { return true; }
+  /** How fast it can curve toward its target, in radians per second. */
+  get turnRate() { return SPELL.turnRate; }
+  /** Very close to its target the spell turns straight at it. */
+  snapsTo(target) { return true; }
 
   update(room, now) {
     if (this.target) {
@@ -595,8 +599,8 @@ export class PlayerSpell extends Spell {
     this.aim = aim;
     const want = Math.atan2(aim.y - this.y, aim.x - this.x), cur = Math.atan2(this.vy, this.vx);
     let diff = want - cur; while (diff > Math.PI) diff -= 2 * Math.PI; while (diff < -Math.PI) diff += 2 * Math.PI;
-    const close = Math.hypot(t.x - this.x, t.y - this.y) < 1.5;
-    const turn = close ? diff : Math.max(-SPELL.turnRate * DT, Math.min(SPELL.turnRate * DT, diff));
+    const close = Math.hypot(t.x - this.x, t.y - this.y) < 1.5 && this.snapsTo(this.target);
+    const turn = close ? diff : Math.max(-this.turnRate * DT, Math.min(this.turnRate * DT, diff));
     const a = cur + turn;
     this.vx = Math.cos(a) * this.spd; this.vy = Math.sin(a) * this.spd;
   }

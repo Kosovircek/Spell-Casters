@@ -88,6 +88,12 @@ export class Player extends Character {
       drawWord(ctx, txt, sx, sy - img.height - 10 + Math.round(Math.sin(view.now / 150)), i => i < morse.spell.length ? '#ffffff' : d.color);
       if (morse.spell) r.aimRing(sx, sy - 6, d.color, view.now);
     } else if (this.id !== view.myId) r.smallText(d.name, sx, sy - img.height - 4, d.color);
+    if (view.duel && !d.dead) { // in a duel, HP under every caster's feet
+      const w = 16, filled = Math.round(w * Math.max(0, d.hp) / d.maxHp);
+      ctx.fillStyle = '#0b0910'; ctx.fillRect(sx - w / 2 - 1, sy + 3, w + 2, 4);
+      ctx.fillStyle = '#3a1d24'; ctx.fillRect(sx - w / 2, sy + 4, w, 2);
+      ctx.fillStyle = d.hp / d.maxHp > 0.3 ? '#81c784' : '#ef5350'; ctx.fillRect(sx - w / 2, sy + 4, filled, 2);
+    }
   }
 }
 
