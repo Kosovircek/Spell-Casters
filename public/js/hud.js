@@ -46,7 +46,7 @@ export class Hud {
   // ---- party panel and floor info
   renderParty(state, myId) {
     const duel = state.duel;
-    $('floor').textContent = duel ? `Duel · round ${duel.round || '-'} · first to ${duel.need} wins · H: Morse sheet`
+    $('floor').textContent = duel ? `Duel · round ${duel.round || '-'} · first to ${duel.need} wins · H: Morse sheet · B: hitboxes`
       : 'Floor ' + state.floor + (state.stairsOpen ? '  - stairs open!' : '  - foes left: ' + state.enemies.length);
     this.setHtml($('party'), state.players.map(p =>
       `<div class="pl" style="border-color:${p.color}"><b style="color:${p.color}">${escapeHtml(p.name)}${p.id === myId ? ' (you)' : ''}</b>` +

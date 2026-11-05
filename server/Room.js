@@ -1,5 +1,5 @@
 // One co-op game: a party of up to 4 players sharing a dungeon. Runs the simulation each tick.
-import { TICK_MS, PLAYER, SPELL, EFFECTS } from './config.js';
+import { TICK_MS, PLAYER, SPELL, EFFECTS, HITBOX } from './config.js';
 import { rnd, pick } from './util.js';
 import { letterPool, wordsFor } from './words.js';
 import { Dungeon } from './Dungeon.js';
@@ -314,7 +314,7 @@ export class Room {
     // Kusanagi cuts through every enemy letter without spending any of its own.
     for (const a of playerSpells()) {
       for (const b of enemySpells()) {
-        if (a.distanceTo(b) >= 0.6) continue;
+        if (a.distanceTo(b) >= HITBOX.block) continue;
         if (a.owner.has('cut') && b.letters !== a.letters[0]) {
           b.removed = true; a.owner.blocks++;
           this.emit({ t: 'block', x: b.x, y: b.y, l: b.letters, cut: true });
@@ -339,7 +339,7 @@ export class Room {
       this.afterEnemyHit(e, result, s.owner, word, now, s);
     }
     for (const s of playerSpells()) {
-      const c = this.chests.find(c => !c.open && s.distanceTo(c) <= 0.55);
+      const c = this.chests.find(c => !c.open && s.distanceTo(c) <= HITBOX.chest);
       if (!c) continue;
       s.removed = true;
       const result = c.lock.apply(s.letters);
@@ -349,7 +349,7 @@ export class Room {
     // Enemy letter vs player.
     for (const s of enemySpells()) {
       if (!s.slowed && alive.some(p => p.trail.some(t => Math.hypot(t.x - s.x, t.y - s.y) < 0.7))) s.slowed = true; // Sleipnir
-      const pl = alive.find(p => !p.dead && s.distanceTo(p) <= 0.45);
+      const pl = alive.find(p => !p.dead && s.distanceTo(p) <= HITBOX.caster);
       if (!pl) continue;
       s.removed = true;
       pl.takeHit(this, now, s);

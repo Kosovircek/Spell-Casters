@@ -4,6 +4,7 @@ import { makeCanvas, hash } from './art/canvas.js';
 import { TILES } from './art/tiles.js';
 import { arenaPlatform, arenaSky, drawTwinkles } from './art/arena.js';
 import { MORSE } from './morse.js';
+import { Player, Spell } from './entities.js';
 
 export class Renderer {
   constructor(canvas) {
@@ -50,6 +51,7 @@ export class Renderer {
 
     view.particles.draw(ctx, this.ox, this.oy);
     this.drawLighting(world, now);
+    if (view.hitboxes) this.drawHitboxes(world);
     this.drawStairsArrow(world);
   }
 
@@ -74,6 +76,37 @@ export class Renderer {
     const ents = [...world.entities.values()].sort((a, b) => a.depth - b.depth);
     for (const e of ents) e.draw(this, view);
     view.particles.draw(ctx, this.ox, this.oy);
+    if (view.hitboxes) this.drawHitboxes(world);
+  }
+
+  /**
+   * What the server really checks, drawn on the floor where the server had each thing at this moment
+   * (the same moment the spells are drawn at, so your own ring can trail your wizard a little while you walk).
+   * A spell hits a caster when its dot enters the caster's ring; two spells meet when their dashed rings touch.
+   */
+  drawHitboxes(world) {
+    const { ctx } = this, hit = world.map.hit;
+    if (!hit) return; // an older server that does not send its sizes
+    const circle = (x, y, r) => { ctx.beginPath(); ctx.arc(x * TS + this.ox, y * TS + this.oy, r * TS, 0, Math.PI * 2); };
+    ctx.save();
+    ctx.lineWidth = 1;
+    for (const e of world.entities.values()) {
+      if (e instanceof Player) {
+        if (e.data.dead) continue;
+        circle(e.hx, e.hy, hit.caster);
+        ctx.globalAlpha = 0.18; ctx.fillStyle = e.data.color; ctx.fill();
+        ctx.globalAlpha = 0.95; ctx.strokeStyle = e.data.color; ctx.stroke();
+      } else if (e instanceof Spell) {
+        const { x: sx, y: sy } = this.toScreen(e.hx, e.hy);
+        ctx.globalAlpha = 0.7; ctx.strokeStyle = e.color; ctx.setLineDash([2, 2]);
+        circle(e.hx, e.hy, hit.block / 2); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.5; ctx.fillStyle = '#ffffff'; ctx.fillRect(sx, sy - 8, 1, 8); // from the orb down to its spot
+        ctx.globalAlpha = 1; ctx.fillStyle = '#0b0910'; ctx.fillRect(sx - 2, sy - 2, 4, 4);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(sx - 1, sy - 1, 2, 2);
+      }
+    }
+    ctx.restore();
   }
 
   /** Floors are drawn right away; walls are returned so they sort with entities (a wall can hide you). */

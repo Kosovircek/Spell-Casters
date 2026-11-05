@@ -9,7 +9,7 @@
 // - Rounds start with a countdown. First to DUEL.winsNeeded round wins takes the duel, then a new one starts.
 // - Levels and gear from the dungeon do not count here: both casters have the same HP, so it is all
 //   about Morse speed, aim and blocking. Duels are never saved.
-import { TICK_MS, DT, PLAYER, SPELL, DUEL } from './config.js';
+import { TICK_MS, DT, PLAYER, SPELL, DUEL, HITBOX } from './config.js';
 import { Dungeon } from './Dungeon.js';
 import { Player, PlayerSpell } from './entities.js';
 import { LETTER_VALUE } from './progression.js';
@@ -252,7 +252,7 @@ export class DuelRoom {
     for (const a of live()) {
       for (const b of live()) {
         if (a.removed || b.removed || a.owner === b.owner || a.id > b.id) continue;
-        if (a.distanceTo(b) >= 0.6 || a.letters[0] !== b.letters[0]) continue;
+        if (a.distanceTo(b) >= HITBOX.block || a.letters[0] !== b.letters[0]) continue;
         let k = 0;
         while (k < a.letters.length && k < b.letters.length && a.letters[k] === b.letters[k]) k++;
         const cancelled = a.letters.slice(0, k);
@@ -273,7 +273,7 @@ export class DuelRoom {
     for (const s of live()) {
       if (this.phase !== 'fight') break;
       const foe = this.opponentOf(s.owner);
-      if (!foe || foe.dead || s.distanceTo(foe) > 0.45) continue;
+      if (!foe || foe.dead || s.distanceTo(foe) > HITBOX.caster) continue;
       s.removed = true;
       const dmg = s.damage;
       foe.hp = Math.max(0, foe.hp - dmg);

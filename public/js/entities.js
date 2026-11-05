@@ -21,6 +21,7 @@ export class Entity {
     this.data = data;                        // latest snapshot from the server
     this.samples = [];                       // recent { t (server time), x, y }, oldest first
     this.local = null;                       // { x, y } predicted on this device (my own caster), drawn instead
+    this.hx = data.x; this.hy = data.y;      // where the server had it at render time (hitboxes are drawn here)
   }
   /** New snapshot from the server (20 times a second); t is the server's time for it. */
   sync(data, t) {
@@ -34,17 +35,25 @@ export class Entity {
    * two snapshots around that moment, so movement stays smooth even when Wi-Fi delivers snapshots unevenly.
    */
   update(dt, renderT) {
-    if (this.local) { this.x = this.local.x; this.y = this.local.y; return; }
+    const p = this.serverPositionAt(renderT);
+    this.hx = p.x; this.hy = p.y;
+    // my own caster is drawn where prediction says, ahead of the server; everything else where the server had it
+    const at = this.local || p;
+    this.x = at.x; this.y = at.y;
+  }
+  /** Where the server had this entity at renderT, sliding between the two snapshots around that moment. */
+  serverPositionAt(renderT) {
     const s = this.samples;
-    if (!s.length || renderT === undefined) { this.x = this.data.x; this.y = this.data.y; return; }
+    if (!s.length || renderT === undefined) return this.data;
     const last = s[s.length - 1];
-    if (renderT <= s[0].t || renderT >= last.t) { const e = renderT <= s[0].t ? s[0] : last; this.x = e.x; this.y = e.y; return; }
+    if (renderT <= s[0].t) return s[0];
+    if (renderT >= last.t) return last;
     let i = s.length - 2;
     while (i > 0 && s[i].t > renderT) i--;
     const a = s[i], b = s[i + 1];
-    if (Math.hypot(b.x - a.x, b.y - a.y) > 3) { this.x = b.x; this.y = b.y; return; } // a teleport: no sliding across the map
+    if (Math.hypot(b.x - a.x, b.y - a.y) > 3) return b; // a teleport: no sliding across the map
     const f = (renderT - a.t) / (b.t - a.t || 1);
-    this.x = a.x + (b.x - a.x) * f; this.y = a.y + (b.y - a.y) * f;
+    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
   }
   /** Draw order: things further down the screen are drawn later (in front). */
   get depth() { return this.y; }
