@@ -151,6 +151,7 @@ export class Game {
       particles: this.particles,
       insight: !!meData?.stats?.fx?.includes('insight'), // Circlet of Insight or the Eye of Odin
       duel: !!world.map?.duel,
+      hitboxes: this.settings.showHitboxes(!!world.map?.duel),
     });
     this.ring.place();
     this.hud.renderHoldBar(this.morse, now);

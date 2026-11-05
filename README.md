@@ -23,6 +23,7 @@ Open http://localhost:3000, pick a name and a room name, and share the page URL 
 | Remove last letter | Backspace |
 | Clear the spell | Numpad . |
 | Morse cheat sheet | H |
+| Show / hide hitboxes | B (on by default in duels; also in Settings) |
 | Settings (speed, letter pause, sound) | Esc |
 
 ### Touch (phones and tablets)

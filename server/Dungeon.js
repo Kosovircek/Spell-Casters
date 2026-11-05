@@ -1,4 +1,4 @@
-import { MAP_W, MAP_H } from './config.js';
+import { MAP_W, MAP_H, HITBOX } from './config.js';
 import { rint } from './util.js';
 
 /** One generated floor: tile grid, rooms, start room and stairs, plus collision and path helpers. */
@@ -98,6 +98,6 @@ export class Dungeon {
 
   /** What the client needs to draw the floor. */
   toMessage(floor, pool) {
-    return { t: 'map', w: this.w, h: this.h, tiles: Array.from(this.tiles).join(''), floor, stairs: this.stairs, pool };
+    return { t: 'map', w: this.w, h: this.h, tiles: Array.from(this.tiles).join(''), floor, stairs: this.stairs, pool, hit: HITBOX };
   }
 }

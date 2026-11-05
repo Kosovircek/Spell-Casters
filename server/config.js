@@ -22,6 +22,16 @@ export const SPELL = {
   maxLetters: 8,
 };
 
+/**
+ * Hit sizes, in tiles. Hits are checked between centres, so these are distances, not per-thing radii.
+ * The client gets them with the map and draws them when hitboxes are on, so what you see is what counts.
+ */
+export const HITBOX = {
+  caster: 0.45,   // an enemy letter (or a duel spell) hits a caster when its centre comes this close
+  block: 0.6,     // two spells meet (and may block each other) when their centres come this close
+  chest: 0.55,    // a spell opens a chest from this close
+};
+
 export const EFFECTS = {
   swiftSeconds: 30,     // Potion of Speed
   slowSeconds: 15,      // Scroll of Slow Time

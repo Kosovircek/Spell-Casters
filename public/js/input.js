@@ -37,6 +37,7 @@ export class Input {
     if (e.code === 'NumpadDecimal') { e.preventDefault(); g.morse.clear(); return; }
     if (e.code === 'Backspace') { e.preventDefault(); g.morse.backspace(); return; }
     if (e.code === 'KeyH') { g.hud.toggleCheatSheet(); return; }
+    if (e.code === 'KeyB') { g.hud.message(g.settings.toggleHitboxes(!!g.world.map?.duel) ? 'Hitboxes on (B to hide).' : 'Hitboxes off (B to show).'); return; }
     if (MOVE_KEYS[e.code]) { e.preventDefault(); this.held.add(e.code); this.sendMove(); }
   }
 
