@@ -1,4 +1,6 @@
 // The duel room: two casters face each other on a long, narrow platform floating among the stars.
+// You get here by walking through the Duel Arena's gate on the surface; each co-op party has its own arena.
+// The Esc menu takes you back out to the surface.
 //
 // - Any letter A to Z can be cast. A spell homes (gently) on the other caster.
 // - Blocking works like in the dungeon: when two spells meet, matching first letters cancel each
@@ -8,7 +10,8 @@
 //   scratches and a long word is deadly. Blocking part of a word leaves only the weaker rest.
 // - Rounds start with a countdown. First to DUEL.winsNeeded round wins takes the duel, then a new one starts.
 // - Levels and gear from the dungeon do not count here: both casters have the same HP, so it is all
-//   about Morse speed, aim and blocking. Duels are never saved.
+//   about Morse speed, aim and blocking. Duels are never saved; your co-op progress
+// was saved when you walked in and is waiting for you on the way out.
 import { TICK_MS, DT, PLAYER, SPELL, DUEL, HITBOX } from './config.js';
 import { Dungeon } from './Dungeon.js';
 import { Player, PlayerSpell } from './entities.js';
@@ -142,7 +145,7 @@ export class DuelRoom {
     pl.send({ t: 'welcome', id: pl.id, room: this.code, duel: true });
     pl.send(this.dungeon.toMessage());
     if (this.players.size === 2) this.newMatch(`${pl.name} accepts the duel!`);
-    else { this.phase = 'waiting'; this.say('Waiting for an opponent. Share the page link!', 4); }
+    else { this.phase = 'waiting'; this.say('Waiting for an opponent from your party...', 4); }
     return pl;
   }
   removePlayer(pl) {

@@ -13,7 +13,10 @@ html, body { margin: 0; height: 100%; background: #0b0910; color: #e8e2f4; font-
 .panel button:hover { background: #ffe082; }
 .panel button.alt { background: #9fa8da; color: #10122a; box-shadow: 3px 3px 0 #2c3166; margin-left: 8px; }
 .panel button.alt:hover { background: #c5cae9; }
-.panel button.alt.invite { background: #ffd54f; color: #2a1a00; box-shadow: 3px 3px 0 #6a3d00; }
+/* the Esc menu: resume, leave the arena, quit to the start screen; the settings follow underneath */
+.panel .menu-buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+.panel .menu-buttons button { margin: 0; }
+.panel h3 { margin: 14px 0 4px; color: #9a8fb0; font-size: 15px; letter-spacing: 2px; text-transform: uppercase; }
 #bossbar .duelists { display: flex; gap: 14px; justify-content: center; align-items: center; }
 #bossbar .wins { letter-spacing: 2px; }
 #bossbar.duel { border-color: #9fa8da; }

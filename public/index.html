@@ -16,19 +16,19 @@
   <p class="sub">A co-op dungeon crawl where every spell is Morse code.</p>
   <label>Name <input id="name" maxlength="12" placeholder="Caster"></label>
   <label>Room <input id="room" maxlength="20" placeholder="lobby"></label>
-  <div class="buttons"><button id="play">Enter the dungeon</button> <button id="duel" class="alt">Duel a friend</button></div>
+  <div class="buttons"><button id="play">Enter the dungeon</button></div>
   <div id="saves" hidden></div>
   <div class="howto">
     <b>Move</b> W A S D or arrow keys<br>
     <b>Tap Morse</b> Numpad 5 (or Space): short press is a dot, long press is a dash<br>
     <b>Cast</b> pause to finish the letter, then aim with Numpad 7 8 9 4 6 1 2 3<br>
     <b>Block</b> enemy spells by casting the same letter at them<br>
-    <b>Dash</b> Numpad 0 &nbsp; <b>Cancel</b> Numpad . / Backspace &nbsp; <b>Cheat sheet</b> H &nbsp; <b>Settings</b> Esc<br>
+    <b>Dash</b> Numpad 0 &nbsp; <b>Cancel</b> Numpad . / Backspace &nbsp; <b>Cheat sheet</b> H &nbsp; <b>Menu and settings</b> Esc<br>
     <b>Items (Angband keys)</b> i inventory, e equipment, g pick up, q quaff, r read, t take off, I inspect, k destroy. Wear (w) and drop (d) from the inventory list<br>
     <b>Surface</b> You start in a village: walk up to the shop's door to buy and sell, or your house's door to store things. Floors stay as you left them; only enemies come back. Stairs go up and down. A Scroll of Recall takes the party to the surface and back down<br>
     <b>Boss</b> The Bellwraith guards the stairs. Its name is shown only in Morse. Its bell shield blocks spells: listen to the letter its bell rings and cast that to break it<br>
     <b>On a phone or tablet</b> hold it sideways. Left half: put a finger down and drag to walk. Right half: tap for a dot, hold for a dash, swipe to cast that way. Tap your own caster for the item ring. Tap the left side without dragging to pick up items<br>
-    <b>Duel</b> Two casters on a floating platform, first to 3 rounds. Any letter goes, the same HP for both, no gear. Block a spell by casting the same letters at it: cast T at an incoming TEA and only EA keeps coming<br>
+    <b>Duel</b> Walk through the gate of the Duel Arena on the surface. Two casters from your party meet on a floating platform, first to 3 rounds; Esc takes you back out. Your co-op gear and levels wait for you outside. Any letter goes, the same HP for both, no gear. Block a spell by casting the same letters at it: cast T at an incoming TEA and only EA keeps coming<br>
     <b>Save</b> Ctrl+S. Lobbies also save every 30 seconds, on each new floor and when everyone leaves
   </div>
 </div>
@@ -59,7 +59,11 @@
 <div id="rotate">Turn your device sideways to play</div>
 
 <div id="settings" class="panel" hidden>
-  <h2>Settings</h2>
+  <h2>Menu</h2>
+  <div class="buttons menu-buttons">
+    <button id="close-settings">Back to the game</button><button id="leave-arena" class="alt" hidden>Back to the surface</button><button id="leave-game" class="alt">Save and quit to start menu</button>
+  </div>
+  <h3>Settings</h3>
   <label>Speed <input id="wpm" type="range" min="3" max="20" step="1"> <span id="wpm-v"></span> WPM</label>
   <p class="note">Dot = <span id="unit-v"></span> ms. Hold longer than <span id="dash-v"></span> ms for a dash.</p>
   <label>Letter pause <input id="gap" type="range" min="2" max="8" step="0.5"> <span id="gap-v"></span> dot lengths</label>
@@ -75,7 +79,6 @@
     <option value="off">Off</option>
   </select></label>
   <p class="note">Rings show what the server really counts as a hit: a spell hits you when its white dot enters your ring, and two spells meet when their dashed rings touch. B toggles them.</p>
-  <button id="close-settings">Back to the game</button>
 </div>
 
 <script type="module" src="js/main.js"></script>

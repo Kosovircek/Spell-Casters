@@ -55,10 +55,12 @@ export class Game {
     this.ring = new RingMenu(this);
     this.touch = new TouchInput(this);
     this.prediction = new Prediction(this);
-    this.lobby = new Lobby((name, room, mode) => this.join(name, room, mode));
+    this.lobby = new Lobby((name, room) => this.join(name, room));
 
     this.settings.bindPanel(this.morse);
     $('close-settings').onclick = () => this.input.toggleSettings();
+    $('leave-arena').onclick = () => this.leaveArena();
+    $('leave-game').onclick = () => this.leaveGame();
     this.listen();
   }
 
@@ -68,12 +70,43 @@ export class Game {
     requestAnimationFrame((t) => this.loop(t));
   }
 
-  join(name, room, mode) {
+  join(name, room) {
     this.roomCode = room;
     this.audio.context(); // unlock audio on this click
     this.music.start();
     this.touch.goFullscreen();
-    this.network.connect(name, room, mode);
+    this.network.connect(name, room);
+  }
+
+  /** Esc menu: save, hang up and go back to the start screen (with this room filled in, to come back later). */
+  leaveGame() {
+    if (!this.inDuel) this.network.save(); // in the arena your co-op progress was already saved on the way in
+    this.network.close();
+    location.href = location.pathname + '?room=' + encodeURIComponent(this.roomCode);
+  }
+  /** Esc menu in a duel: walk back out to the surface, in front of the arena gate. */
+  leaveArena() {
+    if (this.settings.panelOpen) this.input.toggleSettings();
+    this.network.goto('surface');
+  }
+  get inDuel() { return !!this.world.map?.duel; }
+
+  /**
+   * A welcome arrives when I join, and again each time I walk into the arena or back out of it (a new room
+   * on the same connection). Start that room clean: no half-typed spell, no open menu, nobody walking.
+   */
+  onWelcome(m) {
+    const switching = this.myId !== null;
+    this.myId = m.id; this.roomCode = m.room;
+    this.hud.show(m.room, m.duel);
+    $('leave-arena').hidden = !m.duel;
+    if (m.duel) { this.cheatWasHidden = $('cheat').hidden; $('cheat').hidden = true; } // the cheat sheet would cover one end of the duel platform (H shows it)
+    else if (switching && this.cheatWasHidden !== undefined) $('cheat').hidden = this.cheatWasHidden;
+    if (!switching) return;
+    this.morse.clear();
+    this.inventory.close(); this.store.close(); this.ring.close();
+    this.input.lastMove = null; // the new room's caster has not been told how I walk yet
+    this.input.stopWalking();
   }
 
   /** My own player snapshot (pack, equipment, hp...). */
@@ -83,7 +116,7 @@ export class Game {
   // ------------------------------------------------------------------ server messages
   listen() {
     this.network
-      .on('welcome', (m) => { this.myId = m.id; this.roomCode = m.room; this.hud.show(m.room, m.duel); if (m.duel) $('cheat').hidden = true; }) // the cheat sheet would cover one end of the duel platform (H shows it)
+      .on('welcome', (m) => this.onWelcome(m))
       .on('full', (m) => alert(`That room is full (${m.max || 4} players). Try another room name.`))
       .on('map', (m) => { this.world.setMap(m); this.prediction.reset(); this.particles.clear(); this.hud.renderCheatSheet(m.pool); this.store.close(); this.doorKind = null; })
       .on('store', (m) => { if (m.kind && m.kind !== this.doorKind) return; this.store.show(m); }) // ignore it if I already walked away
@@ -128,6 +161,7 @@ export class Game {
   }
   /**
    * On the surface, walking up to the shop's or the house's door opens it; walking away closes it.
+   * Walking into the arena's gate takes you into the duel room.
    * It opens a little before you touch the door and closes only once you are clearly away from it,
    * so the small catch-up of my caster to the server's position never flickers it shut.
    */
@@ -141,7 +175,8 @@ export class Game {
     const kind = door ? door.kind : null;
     if (kind === this.doorKind) return;
     this.doorKind = kind;
-    if (kind) this.network.command('enter', { kind });
+    if (kind === 'arena') { this.store.close(); this.network.goto('arena'); }
+    else if (kind) this.network.command('enter', { kind });
     else this.store.close();
   }
   /** Floor items close enough to pick up (same distance the server uses). */

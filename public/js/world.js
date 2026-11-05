@@ -2,8 +2,8 @@
 import { Player, Enemy, Boss, Chest, Spell, FloorItem } from './entities.js';
 
 // Tile codes from the server (see server/Dungeon.js): 0 wall, 1 floor, 2 grass, 3 path, 4 tree, 5 house, 6 shop,
-// 7 house door, 8 shop door. Doors can be walked into.
-export const WALKABLE = new Set([1, 2, 3, 7, 8]);
+// 7 house door, 8 shop door, 9 duel arena, 10 (sent as 'a') arena gate. Doors can be walked into.
+export const WALKABLE = new Set([1, 2, 3, 7, 8, 10]);
 
 // Other casters, enemies and spells are drawn this far in the past (two server ticks), so there is nearly always
 // a newer snapshot to slide toward even when Wi-Fi delivers them unevenly.
@@ -18,13 +18,13 @@ export class World {
   }
 
   setMap(msg) {
-    this.map = { ...msg, tiles: Uint8Array.from(msg.tiles, c => +c) };
+    this.map = { ...msg, tiles: Uint8Array.from(msg.tiles, c => parseInt(c, 36)) }; // one base-36 character per tile
     this.entities.clear();
     this.clock = null;
   }
   tileAt(i, j) { const m = this.map; return i < 0 || j < 0 || i >= m.w || j >= m.h ? 0 : m.tiles[j * m.w + i]; }
   walkable(i, j) { return WALKABLE.has(this.tileAt(i, j)); }
-  /** The shop or house door at this tile, if any. */
+  /** The shop, house or arena door at this tile, if any. */
   doorAt(i, j) { return (this.map?.doors || []).find(d => d.x === i && d.y === j) || null; }
   get ready() { return !!(this.map && this.state); }
 

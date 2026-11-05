@@ -142,11 +142,19 @@ export class Renderer {
     for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if ((di || dj) && world.walkable(i + di, j + dj)) return true;
     return false;
   }
-  /** Which picture a raised block uses: dungeon wall, tree, or a piece of the house or the shop. */
+  /** Which picture a raised block uses: dungeon wall, tree, or a piece of the house, the shop or the duel arena. */
   blockImage(world, t, i, j) {
     if (t === 4) return TILES.tree[Math.floor(hash(i, j) * 2)];
     if (t === 5 || t === 7) { const b = TILES.house; return t === 7 ? b.door : hash(i, j + 3) > 0.5 ? b.window : b.plain; }
     if (t === 6 || t === 8) { const b = TILES.shop; return t === 8 ? b.door : hash(i, j + 3) > 0.4 ? b.window : b.plain; }
+    if (t === 10) return TILES.arena.gate;
+    if (t === 9) { // sand inside, a stone rim round the edge; the front wall alternates arches and banners
+      const inArena = (a, b) => { const n = world.tileAt(a, b); return n === 9 || n === 10; };
+      if (inArena(i - 1, j) && inArena(i + 1, j) && inArena(i, j - 1) && inArena(i, j + 1)) return TILES.arena.sand;
+      const r = TILES.arena.rim;
+      if (inArena(i, j + 1)) return r.plain; // its front is hidden behind the next row
+      return i % 2 ? r.arch : r.banner;
+    }
     return TILES.wall[Math.floor(hash(j, i) * 3)];
   }
   /** A raised block is WALL_H tall: its top sits up the screen and its front face covers its own square. */

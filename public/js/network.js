@@ -13,18 +13,20 @@ export class Network {
   on(type, fn) { (this.handlers[type] ||= []).push(fn); return this; }
   emit(type, data) { for (const fn of this.handlers[type] || []) fn(data); }
 
-  /** mode is 'duel' for the duel room, anything else for the co-op dungeon. */
-  connect(name, room, mode) {
+  /** Join the co-op game in this room (the duel arena is entered from the surface, see goto). */
+  connect(name, room) {
     const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
     this.ws = new WebSocket(url);
     this.ws.onopen = () => {
-      this.send({ t: 'join', name, room, mode });
+      this.send({ t: 'join', name, room });
       this.ping();
       this.pinger = setInterval(() => this.ping(), 1000);
     };
     this.ws.onmessage = (ev) => { const m = JSON.parse(ev.data); this.emit(m.t, m); };
-    this.ws.onclose = () => { clearInterval(this.pinger); this.emit('close'); };
+    this.ws.onclose = () => { clearInterval(this.pinger); if (!this.leaving) this.emit('close'); };
   }
+  /** Hang up on purpose (leaving to the start menu): no "Disconnected" banner. */
+  close() { this.leaving = true; this.ws?.close(); }
   get connected() { return this.ws && this.ws.readyState === 1; }
   send(msg) { if (this.connected) this.ws.send(JSON.stringify(msg)); }
 
@@ -35,4 +37,6 @@ export class Network {
   cast(word, dx, dy) { this.send({ t: 'cast', w: word, dx, dy }); }
   command(c, args = {}) { this.send({ t: 'cmd', c, ...args }); }
   save() { this.send({ t: 'save' }); }
+  /** 'arena' walks into the duel arena (standing in its gate on the surface), 'surface' leaves it again. */
+  goto(to) { this.send({ t: 'goto', to }); }
 }
