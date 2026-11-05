@@ -72,6 +72,17 @@ Every floor has a boss, the Bellwraith, guarding the stairs room. The stairs onl
 - **Several names.** It has 2 names on floor 1, up to 4 deeper down (pips on the boss bar). Finishing a name makes it shriek, summon two slimes and attack faster, adding letter rings to its letter fans.
 - Beating it drops three items. A Circlet of Insight shows the bell letter and the next letter as plain text.
 
+## Duel room (2 players)
+
+On the start screen, type a room name and click **Duel a friend**. The page URL (`?room=...&mode=duel`) is the invite link: your friend opens it and presses **Join the duel**. Duel rooms are separate from dungeon rooms, even with the same name, and hold exactly two casters (anyone else gets "room full").
+
+- You face each other from the two ends of a long, narrow platform floating in the night sky, inlaid with silver crescent moons and gold stars.
+- **Any letter goes**, A to Z. Spells home gently on the other caster (within the usual 70° aim cone), so a late sidestep can still make one miss. They fly at 4 tiles per second, slow enough to read what is coming.
+- **Blocking works like against enemies**: when two spells meet, matching first letters cancel each other, letter by letter. Cast `T` at an incoming `TEA` and only `EA` keeps coming; cast `TEA` and both spells vanish. A spell whose first letter matches an incoming spell aims for it automatically. Whatever is left of a spell after a block flies on at the other caster.
+- **Damage**: every letter that lands hurts, harder Morse letters more: 2 + the letter's tier (E T A N I M = 3 each, ... B C J P Q V X Y Z = 6 each). Both casters have 50 HP; dungeon levels and gear do not count, and nothing regenerates.
+- **Rounds**: a 3 second countdown (you cannot move or cast), then fight. First to win 3 rounds wins the duel, then a new duel starts by itself. While you wait for an opponent you can walk around and practise casting.
+- Items commands do nothing in a duel, and duels are never saved. All duel numbers are in `DUEL` in `server/config.js`.
+
 ## Chests, items and equipment (Angband-style)
 
 Every floor has 2 to 4 chests with a gold word above them; one is always in the starting room. Spell the word at a chest to open it. Its loot spills onto the floor, and anyone can walk over it and pick it up with `g`, so teammates can share by dropping items.
@@ -172,6 +183,7 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `index.js` | Entry point: starts the web server and the game server |
 | `StaticServer.js` | Serves the `public/` folder |
 | `GameServer.js` | **Networking**: WebSocket connections, rooms, routing messages (`join`, `move`, `cast`, `cmd`) |
+| `DuelRoom.js` | **The duel room**: `Arena` (the platform, a `Dungeon` subclass), `DuelPlayer`, `DuelSpell`, rounds and spell-vs-spell blocking |
 | `Room.js` | **One co-op game**: loads floors, runs `tick()` (update entities, collisions, stairs, wipe), casting and targeting, broadcasts state |
 | `entities.js` | **OOP game objects**: `Entity` → `Actor` → `Player`, `Enemy` (→ `Slime`, `Mage`, `Boss`); `Chest`; `Spell` (→ `PlayerSpell`, `EnemySpell`); `FloorItem`; and `WordLock` (the spell-the-word rule shared by enemies and chests) |
 | `Dungeon.js` | Map generation plus collision, line of sight and path finding |
@@ -191,7 +203,7 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `game.js` | **`Game` class**: creates every part, handles server messages, runs the main loop (`update` then `render`) |
 | `entities.js` | **OOP drawable objects** mirroring the server: `Entity` → `Character` → `Player`, `Enemy` (→ `Slime`, `Mage`, `Boss`); `Chest`; `Spell`; `FloorItem`. Each smooths its position and draws itself |
 | `world.js` | `World`: the tile map and all entities, kept in sync with server snapshots |
-| `renderer.js` | `Renderer`: camera, tiles and walls, depth sorting, lighting, drawing helpers |
+| `renderer.js` | `Renderer`: camera, tiles and walls, depth sorting, lighting, drawing helpers; `renderDuel` for the duel arena |
 | `network.js` | `Network`: WebSocket connection, `on(type, fn)` subscriptions, `move` / `cast` / `command` |
 | `input.js` | `Input`: keyboard handling for Morse, aiming, walking, menus |
 | `morse.js` | `MorseKey`: dot/dash timing and decoding |
@@ -204,4 +216,4 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `settings.js` | `Settings`: saved preferences and the Esc panel |
 | `lobby.js` | `Lobby`: name and room screen |
 | `constants.js` | Screen size, key maps, small helpers |
-| `art/` | Procedural pixel art: `canvas.js` (helpers), `font.js`, `sprites.js`, `tiles.js` |
+| `art/` | Procedural pixel art: `canvas.js` (helpers), `font.js`, `sprites.js`, `tiles.js`, `arena.js` (the duel platform and starry sky) |

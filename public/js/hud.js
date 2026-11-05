@@ -8,9 +8,9 @@ export class Hud {
     this.messages = [];  // Angband-style message line, newest last
     setInterval(() => this.renderMessages(), 500);
   }
-  show(roomCode) {
+  show(roomCode, duel) {
     $('lobby').hidden = true; $('hud').hidden = false; $('touch').hidden = false;
-    $('roomcode').textContent = 'Room: ' + roomCode + '  (share this page URL)';
+    $('roomcode').textContent = (duel ? 'Duel room: ' : 'Room: ') + roomCode + '  (share this page URL)';
   }
   get visible() { return !$('hud').hidden; }
   toggleCheatSheet() { $('cheat').hidden = !$('cheat').hidden; }
@@ -35,21 +35,25 @@ export class Hud {
 
   // ---- party panel and floor info
   renderParty(state, myId) {
-    $('floor').textContent = 'Floor ' + state.floor + (state.stairsOpen ? '  - stairs open!' : '  - foes left: ' + state.enemies.length);
+    const duel = state.duel;
+    $('floor').textContent = duel ? `Duel · round ${duel.round || '-'} · first to ${duel.need} wins · H: Morse sheet`
+      : 'Floor ' + state.floor + (state.stairsOpen ? '  - stairs open!' : '  - foes left: ' + state.enemies.length);
     $('party').innerHTML = state.players.map(p =>
-      `<div class="pl" style="border-color:${p.color}"><b style="color:${p.color}">${escapeHtml(p.name)}${p.id === myId ? ' (you)' : ''}</b> <span class="lv">Lv ${p.lv}</span>` +
-      this.barsHtml(p, p.id === myId) +
-      `<div class="stats">${p.kills} defeated · ${p.blocks} blocked</div>` + this.effectsHtml(p) + `</div>`).join('') +
+      `<div class="pl" style="border-color:${p.color}"><b style="color:${p.color}">${escapeHtml(p.name)}${p.id === myId ? ' (you)' : ''}</b>` +
+      (duel ? '' : ` <span class="lv">Lv ${p.lv}</span>`) +
+      this.barsHtml(p, p.id === myId && !duel, duel) +
+      (duel ? `<div class="stats">${p.wins} round${p.wins === 1 ? '' : 's'} won · ${p.blocks} letters blocked</div>`
+        : `<div class="stats">${p.kills} defeated · ${p.blocks} blocked</div>` + this.effectsHtml(p)) + `</div>`).join('') +
       (state.slow ? `<div class="pl" style="border-color:#ffd54f"><span class="fx">⌛ Enemy spells slowed ${state.slow}s</span></div>` : '');
     const me = state.players.find(p => p.id === myId);
-    $('dead').hidden = !(me && me.dead);
+    $('dead').hidden = !(me && me.dead) || !!duel; // in a duel the round banner says it
     if (me && me.dead) $('dead').textContent = `You are down. Reviving next to a teammate in ${me.respawn}s...`;
   }
   /** HP bar with numbers, and an XP bar for yourself. */
-  barsHtml(p, mine) {
+  barsHtml(p, mine, duel = false) {
     const hpPct = p.maxHp ? Math.max(0, p.hp / p.maxHp * 100) : 0;
     const low = hpPct <= 30 ? ' low' : '';
-    let html = p.dead ? `<div class="down">down, back in ${p.respawn}s</div>`
+    let html = p.dead ? `<div class="down">${duel ? 'defeated' : `down, back in ${p.respawn}s`}</div>`
       : `<div class="bar hpbar${low}"><i style="width:${hpPct}%"></i><span>${p.hp} / ${p.maxHp}</span></div>`;
     if (mine) html += p.xpNext ? `<div class="bar xpbar"><i style="width:${Math.min(100, p.xp / p.xpNext * 100)}%"></i><span>XP ${p.xp} / ${p.xpNext}</span></div>`
       : `<div class="bar xpbar"><i style="width:100%"></i><span>Max level</span></div>`;
@@ -65,10 +69,32 @@ export class Hud {
     return fx.length ? `<div class="effects">${fx.join(' ')}</div>` : '';
   }
 
-  // ---- boss bar (top centre) while the Bellwraith is awake
+  // ---- duel scoreboard (top centre): both casters, their round wins, and what happens now
+  renderDuel(state, myId) {
+    const d = state.duel, el = $('bossbar');
+    el.hidden = false; el.classList.add('duel');
+    const bySide = [0, 1].map(s => state.players.find(p => p.side === s));
+    const side = (p) => {
+      if (!p) return '<span style="color:#6f6a85">waiting...</span>';
+      const pips = Array.from({ length: d.need }, (_, i) => i < p.wins ? '●' : '○').join('');
+      return `<span style="color:${p.color}">${escapeHtml(p.name)}${p.id === myId ? ' (you)' : ''} <span class="wins">${pips}</span></span>`;
+    };
+    const winner = state.players.find(p => p.id === d.winner);
+    const how = {
+      waiting: 'Waiting for an opponent: share this page link. Practise your casting meanwhile.',
+      countdown: `Round ${d.round} starts in ${d.count}...`,
+      fight: 'Cast the same letters at an incoming spell to block it',
+      roundover: winner ? `${winner.name} takes round ${d.round}` : '',
+      over: winner ? `${winner.name} wins the duel! A new duel starts soon` : '',
+    }[d.phase] || '';
+    el.innerHTML = `<div class="bn duelists">${side(bySide[0])}<span>VS</span>${side(bySide[1])}</div><div class="bh">${escapeHtml(how)}</div>`;
+  }
+
+  // ---- boss bar (bottom centre) while the Bellwraith is awake
   renderBoss(state) {
     const b = (state.enemies || []).find(e => e.type === 'boss');
     const el = $('bossbar');
+    el.classList.remove('duel');
     if (!b || !b.awake) { el.hidden = true; return; }
     el.hidden = false;
     const pips = Array.from({ length: b.phases }, (_, i) => `<span class="${i < b.phase ? 'gone' : i === b.phase ? 'cur' : ''}">◆</span>`).join('');

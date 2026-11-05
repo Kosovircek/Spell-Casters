@@ -22,6 +22,8 @@ export class EventEffects {
       case 'down': p.burst(e.x, e.y, '#ef5350', 30, 80, 1); break;
       case 'revive': p.burst(e.x, e.y, '#fff', 20, 50, 0.7); break;
       case 'stairs': sfx('stairs'); break;
+      case 'duelgo': sfx('shatter'); break;
+      case 'duelwin': sfx('bossdown'); p.burst(e.x, e.y, e.c, 60, 110, 1.4); p.burst(e.x, e.y, '#fff59d', 30, 80, 1); p.text(e.x, e.y - 1, 'WINNER', '#fff59d'); this.renderer.shake = 6; break;
       case 'chest': sfx('chest'); p.burst(e.x, e.y, '#ffd54f', 30, 70, 0.9); break;
       case 'cloak': sfx('cloak'); p.burst(e.x, e.y, e.c, 10, 40, 0.4); p.text(e.x, e.y, 'CLOAK ' + e.l, e.c); break;
       case 'use': sfx('cloak'); p.burst(e.x, e.y, e.c, 14, 40, 0.5); break;

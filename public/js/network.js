@@ -7,10 +7,11 @@ export class Network {
   on(type, fn) { (this.handlers[type] ||= []).push(fn); return this; }
   emit(type, data) { for (const fn of this.handlers[type] || []) fn(data); }
 
-  connect(name, room) {
+  /** mode is 'duel' for the duel room, anything else for the co-op dungeon. */
+  connect(name, room, mode) {
     const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
     this.ws = new WebSocket(url);
-    this.ws.onopen = () => this.send({ t: 'join', name, room });
+    this.ws.onopen = () => this.send({ t: 'join', name, room, mode });
     this.ws.onmessage = (ev) => { const m = JSON.parse(ev.data); this.emit(m.t, m); };
     this.ws.onclose = () => this.emit('close');
   }

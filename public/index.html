@@ -16,7 +16,7 @@
   <p class="sub">A co-op dungeon crawl where every spell is Morse code.</p>
   <label>Name <input id="name" maxlength="12" placeholder="Caster"></label>
   <label>Room <input id="room" maxlength="20" placeholder="lobby"></label>
-  <button id="play">Enter the dungeon</button>
+  <div class="buttons"><button id="play">Enter the dungeon</button> <button id="duel" class="alt">Duel a friend</button></div>
   <div id="saves" hidden></div>
   <div class="howto">
     <b>Move</b> W A S D or arrow keys<br>
@@ -27,6 +27,7 @@
     <b>Items (Angband keys)</b> i inventory, e equipment, g pick up, q quaff, r read, t take off, I inspect, k destroy. Wear (w) and drop (d) from the inventory list<br>
     <b>Boss</b> The Bellwraith guards the stairs. Its name is shown only in Morse. Its bell shield blocks spells: listen to the letter its bell rings and cast that to break it<br>
     <b>On a phone or tablet</b> hold it sideways. Left half: put a finger down and drag to walk. Right half: tap for a dot, hold for a dash, swipe to cast that way. Tap your own caster for the item ring. Tap the left side without dragging to pick up items<br>
+    <b>Duel</b> Two casters on a floating platform, first to 3 rounds. Any letter goes, the same HP for both, no gear. Block a spell by casting the same letters at it: cast T at an incoming TEA and only EA keeps coming<br>
     <b>Save</b> Ctrl+S. Lobbies also save every 30 seconds, on each new floor and when everyone leaves
   </div>
 </div>

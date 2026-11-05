@@ -3,11 +3,11 @@ import { rint } from './util.js';
 
 /** One generated floor: tile grid, rooms, start room and stairs, plus collision and path helpers. */
 export class Dungeon {
-  /** Pass `saved` (from toSave) to restore a floor instead of generating a new one. */
-  constructor(saved = null) {
-    this.w = MAP_W;
-    this.h = MAP_H;
-    this.tiles = new Uint8Array(MAP_W * MAP_H); // 0 = wall, 1 = floor
+  /** Pass `saved` (from toSave) to restore a floor instead of generating a new one. Subclasses may pick another size. */
+  constructor(saved = null, size = { w: MAP_W, h: MAP_H }) {
+    this.w = size.w;
+    this.h = size.h;
+    this.tiles = new Uint8Array(this.w * this.h); // 0 = wall, 1 = floor
     this.rooms = [];
     if (saved) this.restore(saved); else this.generate();
   }
@@ -26,7 +26,7 @@ export class Dungeon {
     const rooms = [];
     for (let tries = 0; tries < 400 && rooms.length < 9; tries++) {
       const w = rint(5, 9), h = rint(5, 9);
-      const x = rint(2, MAP_W - w - 3), y = rint(2, MAP_H - h - 3);
+      const x = rint(2, this.w - w - 3), y = rint(2, this.h - h - 3);
       if (rooms.some(r => x < r.x + r.w + 2 && x + w + 2 > r.x && y < r.y + r.h + 2 && y + h + 2 > r.y)) continue;
       rooms.push({ x, y, w, h, cx: x + w / 2, cy: y + h / 2 });
     }
@@ -46,7 +46,7 @@ export class Dungeon {
     const end = order[order.length - 1];
     this.stairs = { x: Math.floor(end.cx), y: Math.floor(end.cy) };
   }
-  carve(x, y) { if (x > 0 && y > 0 && x < MAP_W - 1 && y < MAP_H - 1) this.tiles[y * MAP_W + x] = 1; }
+  carve(x, y) { if (x > 0 && y > 0 && x < this.w - 1 && y < this.h - 1) this.tiles[y * this.w + x] = 1; }
   corridor(a, b) {
     const ax = Math.floor(a.cx), ay = Math.floor(a.cy), bx = Math.floor(b.cx), by = Math.floor(b.cy);
     const hline = (y, x0, x1) => { for (let x = Math.min(x0, x1); x <= Math.max(x0, x1); x++) { this.carve(x, y); this.carve(x, y + 1); } };
@@ -57,8 +57,8 @@ export class Dungeon {
   // ---- queries
   solid(x, y) {
     const i = Math.floor(x), j = Math.floor(y);
-    if (i < 0 || j < 0 || i >= MAP_W || j >= MAP_H) return true;
-    return this.tiles[j * MAP_W + i] === 0;
+    if (i < 0 || j < 0 || i >= this.w || j >= this.h) return true;
+    return this.tiles[j * this.w + i] === 0;
   }
   /** Would a circle of radius r at (x, y) overlap a wall? */
   blocked(x, y, r) { return this.solid(x - r, y - r) || this.solid(x + r, y - r) || this.solid(x - r, y + r) || this.solid(x + r, y + r); }
@@ -73,26 +73,26 @@ export class Dungeon {
   /** Breadth-first search over floor tiles (8-way, no corner cutting). Returns tile-centre waypoints, or undefined. */
   findPath(ax, ay, bx, by, maxLen) {
     const sx = Math.floor(ax), sy = Math.floor(ay), gx = Math.floor(bx), gy = Math.floor(by);
-    const start = sy * MAP_W + sx, goal = gy * MAP_W + gx;
+    const start = sy * this.w + sx, goal = gy * this.w + gx;
     if (start === goal) return [];
-    const prev = new Int32Array(MAP_W * MAP_H).fill(-1), depth = new Uint8Array(MAP_W * MAP_H);
+    const prev = new Int32Array(this.w * this.h).fill(-1), depth = new Uint8Array(this.w * this.h);
     prev[start] = start; const q = [start];
     for (let qi = 0; qi < q.length; qi++) {
       const c = q[qi]; if (c === goal) break;
       if (depth[c] >= maxLen) continue;
-      const cx = c % MAP_W, cy = (c / MAP_W) | 0;
+      const cx = c % this.w, cy = (c / this.w) | 0;
       for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
         const nx = cx + ox, ny = cy + oy;
-        if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
-        const n = ny * MAP_W + nx;
+        if (nx < 0 || ny < 0 || nx >= this.w || ny >= this.h) continue;
+        const n = ny * this.w + nx;
         if (prev[n] !== -1 || !this.tiles[n]) continue;
-        if (ox && oy && (!this.tiles[cy * MAP_W + nx] || !this.tiles[ny * MAP_W + cx])) continue;
+        if (ox && oy && (!this.tiles[cy * this.w + nx] || !this.tiles[ny * this.w + cx])) continue;
         prev[n] = c; depth[n] = depth[c] + 1; q.push(n);
       }
     }
     if (prev[goal] === -1) return undefined;
     const out = [];
-    for (let c = goal; c !== start; c = prev[c]) out.push({ x: c % MAP_W + 0.5, y: ((c / MAP_W) | 0) + 0.5 });
+    for (let c = goal; c !== start; c = prev[c]) out.push({ x: c % this.w + 0.5, y: ((c / this.w) | 0) + 0.5 });
     return out.reverse();
   }
 

@@ -2,7 +2,7 @@
 import { LEVELS } from './config.js';
 
 // Letter difficulty follows the floors' letter tiers: E T A N I M = 1 ... B C J P Q V X Y Z = 4.
-const LETTER_VALUE = {};
+export const LETTER_VALUE = {};
 ['ETANIM', 'SOURDK', 'GWHLF', 'BCJPQVXYZ'].forEach((tier, i) => { for (const c of tier) LETTER_VALUE[c] = i + 1; });
 const TYPE_MULT = { slime: 1, mage: 1.5, boss: 5, chest: 0.5 };
 
