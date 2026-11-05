@@ -48,7 +48,12 @@ export class Input {
 
   /** A numpad direction was pressed: send the finished spell that way. */
   castToward([ux, uy]) {
-    const word = this.game.morse.take();
+    // With the right hand on the numpad, the index finger often hits 4, 7 or 1 a moment before the
+    // middle finger has lifted off 5. That press is the last dot or dash of the spell, so finish it
+    // now instead of dropping the cast (take() returns nothing while the Morse key is down).
+    const m = this.game.morse;
+    if (m.isDown) { this.game.audio.toneOff(); m.release(performance.now()); }
+    const word = m.take();
     if (!word) return;
     const d = normalize(ux, uy);
     this.game.network.cast(word, d.x, d.y);
