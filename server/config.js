@@ -48,7 +48,10 @@ export const DUEL = {
   winsNeeded: 3,          // first to win this many rounds wins the duel
   spellSpeed: 4,          // tiles per second: slow enough to read an incoming word and block it
   spellLifetime: 9,       // seconds
-  turnRate: 2.5,          // radians per second: homing is gentle, so a late sidestep can make a spell miss
+  bendRate: 0.4,          // radians per second a spell may curve toward the other caster...
+  maxBend: 0.2,           // ...and at most this much in total (about 11 degrees): it bends, it does not track
+  bendStop: 5,            // tiles: closer than this it flies straight, so a sidestep makes it miss
+  blockTurnRate: 4,       // a spell aimed at an incoming spell (a block) still steers firmly to meet it
   countdown: 3,           // seconds before each round
   roundPause: 3,          // seconds to look at the result of a round
   matchPause: 6,          // seconds after the winning round before a new duel starts

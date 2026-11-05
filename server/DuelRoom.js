@@ -3,11 +3,13 @@
 // - Any letter A to Z can be cast. A spell homes (gently) on the other caster.
 // - Blocking works like in the dungeon: when two spells meet, matching first letters cancel each
 //   other, letter by letter. Cast T at an incoming TEA and only EA keeps flying; cast TEA and both vanish.
-// - Every letter that reaches the other caster hurts: harder Morse letters hurt more.
+// - Spells only bend a little toward the other caster; they do not track you. Blocking spells steer harder.
+// - Words are what hurt: damage grows with the square of the length, so a single easy letter barely
+//   scratches and a long word is deadly. Blocking part of a word leaves only the weaker rest.
 // - Rounds start with a countdown. First to DUEL.winsNeeded round wins takes the duel, then a new one starts.
 // - Levels and gear from the dungeon do not count here: both casters have the same HP, so it is all
 //   about Morse speed, aim and blocking. Duels are never saved.
-import { TICK_MS, PLAYER, SPELL, DUEL } from './config.js';
+import { TICK_MS, DT, PLAYER, SPELL, DUEL } from './config.js';
 import { Dungeon } from './Dungeon.js';
 import { Player, PlayerSpell } from './entities.js';
 import { LETTER_VALUE } from './progression.js';
@@ -69,11 +71,37 @@ export class DuelSpell extends PlayerSpell {
     this.spd = DUEL.spellSpeed;
     this.vx = dx * this.spd; this.vy = dy * this.spd;
     this.ttl = DUEL.spellLifetime;
+    this.bent = 0; // radians curved toward the other caster so far
   }
-  get turnRate() { return DUEL.turnRate; }
-  snapsTo(target) { return target.kind === 'proj'; } // locks on to a spell it blocks, but a caster can still sidestep
-  /** Damage when it reaches the other caster: every letter counts, harder letters more. */
-  get damage() { return [...this.letters].reduce((a, c) => a + 2 + (LETTER_VALUE[c] || 1), 0); }
+  get turnRate() { return DUEL.blockTurnRate; }
+  snapsTo(target) { return target.kind === 'proj'; } // locks on to a spell it blocks
+  /** Only a spell steering to meet another spell slides along the platform's edge; the rest fizzle there. */
+  onWall(room, px, py) {
+    if (this.target && this.target.kind === 'proj') return super.onWall(room, px, py);
+    room.emit({ t: 'fizzle', x: this.x, y: this.y });
+    return false;
+  }
+  /** Toward a caster: a small, limited bend while still far away, then straight on. */
+  steer(room, t) {
+    if (this.target.kind !== 'player') return super.steer(room, t);
+    const left = DUEL.maxBend - this.bent;
+    if (left <= 0 || Math.hypot(t.x - this.x, t.y - this.y) < DUEL.bendStop) return;
+    const want = Math.atan2(t.y - this.y, t.x - this.x), cur = Math.atan2(this.vy, this.vx);
+    let diff = want - cur; while (diff > Math.PI) diff -= 2 * Math.PI; while (diff < -Math.PI) diff += 2 * Math.PI;
+    const step = Math.min(DUEL.bendRate * DT, left);
+    const turn = Math.max(-step, Math.min(step, diff));
+    this.bent += Math.abs(turn);
+    const a = cur + turn;
+    this.vx = Math.cos(a) * this.spd; this.vy = Math.sin(a) * this.spd;
+  }
+  /**
+   * Damage when it reaches the other caster: the letters' Morse difficulty (1 to 4 each) times half the
+   * length. E = 1, TEA = 5, MOON = 12, GHOST = 28, SHADOW = 39 (of 50 HP).
+   */
+  get damage() {
+    const sum = [...this.letters].reduce((a, c) => a + (LETTER_VALUE[c] || 1), 0);
+    return Math.max(1, Math.round(sum * this.letters.length / 2));
+  }
 }
 
 // ------------------------------------------------------------------ room

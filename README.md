@@ -77,9 +77,10 @@ Every floor has a boss, the Bellwraith, guarding the stairs room. The stairs onl
 On the start screen, type a room name and click **Duel a friend**. The page URL (`?room=...&mode=duel`) is the invite link: your friend opens it and presses **Join the duel**. Duel rooms are separate from dungeon rooms, even with the same name, and hold exactly two casters (anyone else gets "room full").
 
 - You face each other from the two ends of a long, narrow platform floating in the night sky, inlaid with silver crescent moons and gold stars.
-- **Any letter goes**, A to Z. Spells home gently on the other caster (within the usual 70° aim cone), so a late sidestep can still make one miss. They fly at 4 tiles per second, slow enough to read what is coming.
-- **Blocking works like against enemies**: when two spells meet, matching first letters cancel each other, letter by letter. Cast `T` at an incoming `TEA` and only `EA` keeps coming; cast `TEA` and both spells vanish. A spell whose first letter matches an incoming spell aims for it automatically. Whatever is left of a spell after a block flies on at the other caster.
-- **Damage**: every letter that lands hurts, harder Morse letters more: 2 + the letter's tier (E T A N I M = 3 each, ... B C J P Q V X Y Z = 6 each). Both casters have 50 HP; dungeon levels and gear do not count, and nothing regenerates.
+- **Any letter goes**, A to Z. Spells fly at 4 tiles per second, slow enough to read what is coming. Aimed at the other caster they only **bend a little** (at most about 11°, and not at all in the last 5 tiles), so they do not track you: step aside and they miss.
+- A spell whose first letter matches an incoming spell steers firmly to meet it, so blocks are easy to land.
+- **Blocking works like against enemies**: when two spells meet, matching first letters cancel each other, letter by letter. Cast `T` at an incoming `TEA` and only `EA` keeps coming; cast `TEA` and both spells vanish. Whatever is left of a spell after a block flies on.
+- **Words are what hurt.** Damage = the letters' Morse difficulty (E T A N I M = 1, S O U R D K = 2, G W H L F = 3, the rest = 4) × half the length: `E` = 1, `TEA` = 5, `MOON` = 12, `GHOST` = 28, `SHADOW` = 39. So countering just the start of a long word takes most of its sting away (`SHADOW` blocked down to `DOW` does 11). Both casters have 50 HP; dungeon levels and gear do not count, and nothing regenerates.
 - **Rounds**: a 3 second countdown (you cannot move or cast), then fight. First to win 3 rounds wins the duel, then a new duel starts by itself. While you wait for an opponent you can walk around and practise casting.
 - Items commands do nothing in a duel, and duels are never saved. All duel numbers are in `DUEL` in `server/config.js`.
 
