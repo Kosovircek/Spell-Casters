@@ -84,7 +84,8 @@ export class Renderer {
    * the same ORB_LIFT pixels so it sits on the body of the caster and around the orb of the spell (lifting all
    * of them equally keeps every distance the same). Spells and your own ring are drawn where the server has
    * them now; your ring trails your wizard only by the real delay before the server hears your keys.
-   * A spell hits a caster when its dot enters the caster's ring; two spells meet when their dashed rings touch.
+   * A spell hits a caster when its dot enters the caster's ring (in a duel: when any of its letter boxes touches
+   * the ring); two spells meet when their dashed rings touch.
    */
   drawHitboxes(world) {
     const { ctx } = this, hit = world.map.hit;
@@ -103,8 +104,18 @@ export class Renderer {
         ctx.globalAlpha = 0.7; ctx.strokeStyle = e.color; ctx.setLineDash([2, 2]);
         circle(e.hx, e.hy, hit.block / 2); ctx.stroke();
         ctx.setLineDash([]);
-        ctx.globalAlpha = 1; ctx.fillStyle = '#0b0910'; ctx.fillRect(sx - 2, sy - 2, 4, 4);
-        ctx.fillStyle = '#ffffff'; ctx.fillRect(sx - 1, sy - 1, 2, 2);
+        if (world.map.duel && hit.letterW) {
+          // In a duel each letter is a box: any box touching a caster's ring lands the whole spell. The boxes
+          // are laid out like drawWord lays out the letters, so their lines fall on the letters' dark outlines
+          // (never on the white strokes) and the word stays readable.
+          const n = e.data.l.length, w = Math.round(hit.letterW * TS), h = Math.round(hit.letterH * TS);
+          const left = Math.round(sx - (n * w + 1) / 2), top = Math.round(sy - h / 2);
+          ctx.globalAlpha = 1; ctx.strokeStyle = e.color;
+          for (let i = 0; i < n; i++) ctx.strokeRect(left + i * w + 0.5, top + 0.5, w, h);
+        } else {
+          ctx.globalAlpha = 1; ctx.fillStyle = '#0b0910'; ctx.fillRect(sx - 2, sy - 2, 4, 4);
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(sx - 1, sy - 1, 2, 2);
+        }
       }
     }
     ctx.restore();

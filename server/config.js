@@ -30,6 +30,10 @@ export const HITBOX = {
   caster: 0.45,   // an enemy letter (or a duel spell) hits a caster when its centre comes this close
   block: 0.6,     // two spells meet (and may block each other) when their centres come this close
   chest: 0.55,    // a spell opens a chest from this close
+  // In a duel every letter of a spell is its own box, the size of the letter as drawn (6 x 8 pixels), side by
+  // side across the word: a spell hits a caster as soon as any letter's box touches the caster's ring.
+  letterW: 6 / 16,
+  letterH: 8 / 16,
 };
 
 export const EFFECTS = {

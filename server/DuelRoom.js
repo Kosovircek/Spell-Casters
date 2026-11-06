@@ -8,6 +8,8 @@
 // - Spells only bend a little toward the other caster; they do not track you. Blocking spells steer harder.
 // - Words are what hurt: damage grows with the square of the length, so a single easy letter barely
 //   scratches and a long word is deadly. Blocking part of a word leaves only the weaker rest.
+// - Every letter of a spell has its own hitbox, so a long word is wide: whichever letter touches you first,
+//   the whole spell hits you once, for its full damage.
 // - Rounds start with a countdown. First to DUEL.winsNeeded round wins takes the duel, then a new one starts.
 // - Levels and gear from the dungeon do not count here: both casters have the same HP, so it is all
 //   about Morse speed, aim and blocking. Duels are never saved; your co-op progress
@@ -96,6 +98,22 @@ export class DuelSpell extends PlayerSpell {
     this.bent += Math.abs(turn);
     const a = cur + turn;
     this.vx = Math.cos(a) * this.spd; this.vy = Math.sin(a) * this.spd;
+  }
+  /**
+   * One box per letter, as the word is drawn: always left to right across the screen, centred on the spell,
+   * whichever way it flies. A blocked word loses its first letters, so the boxes shrink with it.
+   */
+  letterBoxes() {
+    const n = this.letters.length, w = HITBOX.letterW, h = HITBOX.letterH;
+    return [...this.letters].map((_, i) => ({ x: this.x + (i - (n - 1) / 2) * w, y: this.y, w, h }));
+  }
+  /** Does any letter's box touch this caster's ring? */
+  touches(caster) {
+    return this.letterBoxes().some(b => {
+      const cx = Math.max(b.x - b.w / 2, Math.min(caster.x, b.x + b.w / 2));
+      const cy = Math.max(b.y - b.h / 2, Math.min(caster.y, b.y + b.h / 2));
+      return Math.hypot(caster.x - cx, caster.y - cy) <= HITBOX.caster;
+    });
   }
   /**
    * Damage when it reaches the other caster: the letters' Morse difficulty (1 to 4 each) times half the
@@ -272,11 +290,11 @@ export class DuelRoom {
         }
       }
     }
-    // Spell vs caster.
+    // Spell vs caster: any letter touching the caster lands the whole spell, once (then it is gone).
     for (const s of live()) {
       if (this.phase !== 'fight') break;
       const foe = this.opponentOf(s.owner);
-      if (!foe || foe.dead || s.distanceTo(foe) > HITBOX.caster) continue;
+      if (!foe || foe.dead || !s.touches(foe)) continue;
       s.removed = true;
       const dmg = s.damage;
       foe.hp = Math.max(0, foe.hp - dmg);
