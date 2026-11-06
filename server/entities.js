@@ -100,6 +100,8 @@ export class Player extends Actor {
     this.pearlUsed = false;             // Pearl of the Dragon King, once per floor
     this.draupnir = 0;                  // kills counted toward Draupnir's potion
     this.trail = [];                    // Horseshoes of Sleipnir: recent footsteps
+    this.practiceStreak = 0;            // practice yard: words spelled in a row without a wrong letter
+    this.practiceBest = 0;              // ...and the best streak ever (saved)
     this.pack = [];                     // inventory a) .. l)
     this.home = [];                     // what this caster keeps in their house on the surface
     this.gold = GOLD.start;
@@ -267,7 +269,7 @@ export class Player extends Actor {
 
   // ---- saving: what a player keeps when the lobby is saved and resumed
   toSave() {
-    return { name: this.name, x: this.x, y: this.y, hp: this.hp, dead: this.dead, level: this.level, xp: this.xp, kills: this.kills, blocks: this.blocks, ward: this.ward, gold: this.gold, pack: this.pack, home: this.home, equip: this.equip };
+    return { name: this.name, x: this.x, y: this.y, hp: this.hp, dead: this.dead, level: this.level, xp: this.xp, kills: this.kills, blocks: this.blocks, ward: this.ward, gold: this.gold, pack: this.pack, home: this.home, equip: this.equip, practiceBest: this.practiceBest };
   }
   /** Take back saved progress (matched by name when someone rejoins). Saves from before levelling start at level 1. */
   restore(s) {
@@ -283,7 +285,7 @@ export class Player extends Actor {
       if (d.level <= this.level && !this.equip[d.slot]) this.equip[d.slot] = it;
       else Items.addToPack(this.pack, it); // gear above your level waits in the pack
     }
-    this.kills = s.kills | 0; this.blocks = s.blocks | 0; this.ward = s.ward | 0;
+    this.kills = s.kills | 0; this.blocks = s.blocks | 0; this.ward = s.ward | 0; this.practiceBest = s.practiceBest | 0;
     if (Number.isFinite(s.x) && Number.isFinite(s.y)) { this.x = s.x; this.y = s.y; }
     this.refreshStats();
     const oldSave = !s.level; // hearts, not HP: start full
@@ -555,7 +557,7 @@ export class Spell extends Entity {
     const px = this.x, py = this.y, k = this.timeScale(room, now);
     this.x += this.vx * DT * k; this.y += this.vy * DT * k; this.ttl -= DT * k;
     if (this.ttl <= 0) { this.removed = true; return; }
-    if (room.dungeon.solid(this.x, this.y) && !this.onWall(room, px, py)) this.removed = true;
+    if (room.dungeon.airSolid(this.x, this.y) && !this.onWall(room, px, py)) this.removed = true;
   }
   snapshot() { return { ...super.snapshot(), o: this.fromPlayer ? 'p' : 'e', l: this.letters }; }
 }

@@ -55,7 +55,7 @@ The menus are the same Angband-style ones as on the keyboard: every row is a but
 
 ## The surface and persistent floors
 
-A new game starts on **the surface**, a small village above the dungeon with your house, a shop, the duel arena and the stairs down to floor 1.
+A new game starts on **the surface**, a small village above the dungeon with your house, a shop, the duel arena, the zoo, the practice yard, the wishing fountain and the stairs down to floor 1.
 
 - **Floors are persistent**, like in Angband. Every floor keeps its layout, its chests (opened or not) and every item lying on the ground when you leave it, also after the game is saved and loaded.
 - **Only the enemies come back.** Every time the party arrives on a floor it gets new enemies, as tough as that floor's depth (more of them, more letters, harder hits).
@@ -69,6 +69,10 @@ A new game starts on **the surface**, a small village above the dungeon with you
 - **The shop** (Dot & Dash Goods, the blue roof): walk up to its door to open it. Tabs: *Potions & scrolls*, *Weapons*, *Armour* (Bronze and Iron gear) and *Sell*. The shop buys anything from your pack for a third of its price. Things it does not stock itself (better gear, mythic items) stay on its shelf, marked "sold by a caster", so they can be bought back.
 - **Your house** (the red roof): every caster has their own, with room for 24 items. Tabs: *Your house* (take things out) and *Your pack* (leave things there). It is kept in the save with the rest of your caster.
 - **The Duel Arena** (the open stone ring with moon banners): walk through its gate to duel a caster from your party, see *Duel room*.
+- **The zoo** (east of the shop, follow the path past the lamp posts): six fenced pens on either side of a path. Spells fly over the low fences, so you can feed the animals by spelling the letter (or word) each one holds: they hop with joy and want something new. The three surface animals each eat their own kind of Morse: the **Dashhound** only dashes (T M O), the **Dotted Owl** only dots (E I S H) and the **Hopper** a mix. The other three pens stay empty (signed "? ? ?") until the party has defeated a **Slime**, a **Skeleton Mage** or **the Bellwraith** in the dungeon; then two of them (one Bellwraith, whose word is written only in Morse) move in, and the sign counts how many the party has defeated. Every 25 treats the keeper gives the feeder 5 gold.
+- **The practice yard** (fenced, south of your house): four straw dummies to practise on, nothing shoots back. Dummy 1 holds single letters, 2 two-letter words, 3 three-letter words and 4 the longest words, all with the letters of the deepest floor the party has reached. Spell words without a wrong letter to build a **streak** (shown over the dummy); a wrong letter ends it. Your best streak is kept with your save.
+- **The wishing fountain** (on the stone plaza south of the stairs): standing next to it heals you (10% of your HP every second). Spell its wish word (WISH, LUCK, COIN, HOPE or STAR) to toss in 10 gold: you get a ward that stops one hit, up to 3.
+- Lamp posts light the paths at dusk.
 - Keys in both: a letter picks an item, then **y** (or Enter) buys, sells, takes or stores it. **Tab**, **← →** or **1-4** switch tabs. **Esc** leaves. On touch screens tap the tabs and items; walking away closes the screen.
 
 | Item | Price | What it does |
@@ -229,7 +233,8 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `GameServer.js` | **Networking**: WebSocket connections, rooms, routing messages (`join`, `move`, `cast`, `cmd`) |
 | `DuelRoom.js` | **The duel room** (each co-op room has one; `GameServer.enterArena` / `leaveArena` move a caster in and out on the same connection): `Arena` (the platform, a `Dungeon` subclass), `DuelPlayer`, `DuelSpell`, rounds and spell-vs-spell blocking |
 | `Room.js` | **One co-op game**: keeps every visited floor (`levels`), moves the party between floors (`enterFloor`: stairs, recall and descent scrolls, wipes), runs `tick()` (update entities, collisions, stairs, wipe), casting and targeting, broadcasts state |
-| `Town.js` | `Town`: the surface village (a fixed `Dungeon` subclass with the house, the shop, the duel arena, their doors and the stairs down) |
+| `Town.js` | `Town`: the surface village (a fixed `Dungeon` subclass with the house, the shop, the duel arena, their doors, the zoo's pens, the practice yard, the fountain, lamp posts and the stairs down) |
+| `Critters.js` | Friendly surface things you cast at: `Critter` → `ZooAnimal`, `Dummy` (practice streaks), `Fountain` (heals, wishes for a ward); `townCritters` fills the zoo from `Room.bestiary` |
 | `Shop.js` | `Shop`: the shop's stock, buying, selling and its shelf of resold items, and every caster's house storage |
 | `entities.js` | **OOP game objects**: `Entity` → `Actor` → `Player`, `Enemy` (→ `Slime`, `Mage`, `Boss`); `Chest`; `Spell` (→ `PlayerSpell`, `EnemySpell`); `FloorItem`; and `WordLock` (the spell-the-word rule shared by enemies and chests) |
 | `Dungeon.js` | Tile codes, map generation with stairs down and up, plus collision, line of sight and path finding |
@@ -265,4 +270,4 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `settings.js` | `Settings`: saved preferences and the Esc panel |
 | `lobby.js` | `Lobby`: name and room screen |
 | `constants.js` | Screen size, key maps, small helpers |
-| `art/` | Procedural pixel art: `canvas.js` (helpers), `font.js`, `sprites.js`, `tiles.js` (dungeon, stairs up and down, and the village's grass, paths, trees, buildings and duel arena), `arena.js` (the duel platform and starry sky) |
+| `art/` | Procedural pixel art: `canvas.js` (helpers), `font.js`, `sprites.js`, `tiles.js` (dungeon, stairs up and down, and the village's grass, paths, trees, buildings and duel arena), `arena.js` (the duel platform and starry sky), `critters.js` (zoo animals, the practice dummy, fences and lamp posts) |

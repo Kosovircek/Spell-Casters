@@ -5,11 +5,17 @@ import { rint } from './util.js';
  * Tile codes (sent to the client as one base-36 character per tile). The dungeon only uses WALL and FLOOR;
  * the surface town adds grass, paths, trees and buildings. Doors are walkable: stepping in opens the shop or your house, or takes you into the duel arena.
  */
-export const TILE = { WALL: 0, FLOOR: 1, GRASS: 2, PATH: 3, TREE: 4, HOUSE: 5, SHOP: 6, HOME_DOOR: 7, SHOP_DOOR: 8, ARENA: 9, ARENA_DOOR: 10 };
+export const TILE = {
+  WALL: 0, FLOOR: 1, GRASS: 2, PATH: 3, TREE: 4, HOUSE: 5, SHOP: 6, HOME_DOOR: 7, SHOP_DOOR: 8, ARENA: 9, ARENA_DOOR: 10,
+  FENCE: 11, FOUNTAIN: 12, LAMP: 13, // the zoo's and the practice yard's fences, the wishing fountain's basin, lamp posts
+};
 /** Tiles travel as one character each: 0-9, then a, b... (base 36), so old all-digit saves still load. */
 const encodeTiles = (tiles) => Array.from(tiles, t => t.toString(36)).join('');
 
 export const WALKABLE = new Set([TILE.FLOOR, TILE.GRASS, TILE.PATH, TILE.HOME_DOOR, TILE.SHOP_DOOR, TILE.ARENA_DOOR]);
+/** Low things you cannot walk through but spells fly over: fences and the fountain's basin. */
+export const LOW = new Set([TILE.FENCE, TILE.FOUNTAIN]);
+const AIRWAY = new Set([...WALKABLE, ...LOW]);
 
 /** One generated floor: tile grid, rooms, start room, stairs down and up, plus collision and path helpers. */
 export class Dungeon {
@@ -74,12 +80,18 @@ export class Dungeon {
     if (i < 0 || j < 0 || i >= this.w || j >= this.h) return true;
     return !WALKABLE.has(this.tiles[j * this.w + i]);
   }
+  /** Does this spot stop a flying spell? Like solid(), except spells pass over low fences and the fountain. */
+  airSolid(x, y) {
+    const i = Math.floor(x), j = Math.floor(y);
+    if (i < 0 || j < 0 || i >= this.w || j >= this.h) return true;
+    return !AIRWAY.has(this.tiles[j * this.w + i]);
+  }
   /** Would a circle of radius r at (x, y) overlap a wall? */
   blocked(x, y, r) { return this.solid(x - r, y - r) || this.solid(x + r, y - r) || this.solid(x - r, y + r) || this.solid(x + r, y + r); }
-  /** Clear line of sight between two points? */
+  /** Clear line of sight between two points? (You can see, and cast, over low fences.) */
   los(ax, ay, bx, by) {
     const d = Math.hypot(bx - ax, by - ay), steps = Math.ceil(d / 0.25);
-    for (let s = 1; s < steps; s++) { const t = s / steps; if (this.solid(ax + (bx - ax) * t, ay + (by - ay) * t)) return false; }
+    for (let s = 1; s < steps; s++) { const t = s / steps; if (this.airSolid(ax + (bx - ax) * t, ay + (by - ay) * t)) return false; }
     return true;
   }
   isStairs(x, y) { return Math.floor(x) === this.stairs.x && Math.floor(y) === this.stairs.y; }
@@ -101,7 +113,7 @@ export class Dungeon {
     return { x: this.start.cx, y: this.start.cy };
   }
 
-  /** Breadth-first search over floor tiles (8-way, no corner cutting). Returns tile-centre waypoints, or undefined. */
+  /** Breadth-first search over the tiles a spell can fly over (8-way, no corner cutting). Returns tile-centre waypoints, or undefined. */
   findPath(ax, ay, bx, by, maxLen) {
     const sx = Math.floor(ax), sy = Math.floor(ay), gx = Math.floor(bx), gy = Math.floor(by);
     const start = sy * this.w + sx, goal = gy * this.w + gx;
@@ -116,8 +128,8 @@ export class Dungeon {
         const nx = cx + ox, ny = cy + oy;
         if (nx < 0 || ny < 0 || nx >= this.w || ny >= this.h) continue;
         const n = ny * this.w + nx;
-        if (prev[n] !== -1 || !WALKABLE.has(this.tiles[n])) continue;
-        if (ox && oy && (!WALKABLE.has(this.tiles[cy * this.w + nx]) || !WALKABLE.has(this.tiles[ny * this.w + cx]))) continue;
+        if (prev[n] !== -1 || !AIRWAY.has(this.tiles[n])) continue;
+        if (ox && oy && (!AIRWAY.has(this.tiles[cy * this.w + nx]) || !AIRWAY.has(this.tiles[ny * this.w + cx]))) continue;
         prev[n] = c; depth[n] = depth[c] + 1; q.push(n);
       }
     }

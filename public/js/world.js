@@ -1,8 +1,9 @@
 // Everything the client knows about the current floor: the tile map and the entities on it.
-import { Player, Enemy, Boss, Chest, Spell, FloorItem } from './entities.js';
+import { Player, Enemy, Boss, Chest, Spell, FloorItem, Critter } from './entities.js';
 
 // Tile codes from the server (see server/Dungeon.js): 0 wall, 1 floor, 2 grass, 3 path, 4 tree, 5 house, 6 shop,
-// 7 house door, 8 shop door, 9 duel arena, 10 (sent as 'a') arena gate. Doors can be walked into.
+// 7 house door, 8 shop door, 9 duel arena, 10 (sent as 'a') arena gate, 11 ('b') fence, 12 ('c') the fountain's
+// basin, 13 ('d') lamp post. Doors can be walked into; fences and the basin are low (spells fly over them).
 export const WALKABLE = new Set([1, 2, 3, 7, 8, 10]);
 
 // Other casters, enemies and spells are drawn this far in the past (two server ticks), so there is nearly always
@@ -49,6 +50,7 @@ export class World {
     sync(state.players, d => new Player(d));
     sync(state.enemies, d => Enemy.create(d));
     sync(state.chests, d => new Chest(d));
+    sync(state.critters, d => new Critter(d));
     sync(state.items, d => new FloorItem(d));
     sync(state.projs, d => new Spell(d));
     for (const id of this.entities.keys()) if (!seen.has(id)) this.entities.delete(id);

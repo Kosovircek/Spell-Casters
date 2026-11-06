@@ -14,6 +14,7 @@ import { Player, Enemy, Slime, Mage, Boss, Chest, PlayerSpell, FloorItem } from 
 import { xpFor, goldFor, chestGold } from './progression.js';
 import { ItemCommands } from './ItemCommands.js';
 import { Shop } from './Shop.js';
+import { townCritters } from './Critters.js';
 import * as Items from './items.js';
 
 const SHOP_COMMANDS = ['enter', 'buy', 'sell', 'stash', 'take'];
@@ -34,6 +35,10 @@ export class Room {
     this.travel = null;       // { at, to } a Scroll of Recall or descent scroll about to carry the party away
     this.dungeon = null;
     this.foundMythics = new Set(); // mythic items drop at most once per game (like Angband artifacts)
+    this.bestiary = {};       // enemy type -> how many the party has defeated; each kind met moves into the zoo
+    this.zooNew = [];         // zoo pens that opened since the party was last on the surface
+    this.zooFed = 0;          // treats the zoo animals have had
+    this.critters = [];       // zoo animals, practice dummies and the wishing fountain (surface only)
     this.events = [];         // effects for clients (hits, blocks...), flushed every tick
     this.banner = null;       // { text, until } big centred message
     this.itemCommands = new ItemCommands(this);
@@ -51,7 +56,7 @@ export class Room {
     for (const pl of this.players.values()) players[pl.name.toLowerCase()] = pl.toSave();
     return {
       version: 3, room: this.code, savedAt: Date.now(), floor: this.floor, maxDepth: this.maxDepth,
-      foundMythics: [...this.foundMythics],
+      foundMythics: [...this.foundMythics], bestiary: this.bestiary, zooFed: this.zooFed,
       levels: { ...this.levels, [this.floor]: this.levelSave() },
       enemies: this.enemies.map(e => e.toSave()), // the fight on the current floor carries on where it was
       shop: this.shop.toSave(),
@@ -74,6 +79,8 @@ export class Room {
     this.floor = Math.max(0, s.floor | 0);
     this.maxDepth = Math.max(this.floor, s.maxDepth | 0);
     this.foundMythics = new Set(s.foundMythics || []);
+    this.bestiary = s.bestiary && typeof s.bestiary === 'object' ? s.bestiary : {};
+    this.zooFed = s.zooFed | 0;
     this.levels = s.levels || {};
     // Saves from before persistent floors (version 2) only had the current floor.
     if (!s.levels) this.levels[this.floor] = { dungeon: s.dungeon, chests: s.chests, items: s.items, cleared: !!s.stairsOpen };
@@ -105,6 +112,8 @@ export class Room {
     this.wipeAt = 0;
     this.slowUntil = 0;
     this.travel = null;
+    if (this.town) this.dungeon.bestiary = this.bestiary; // the zoo's signs count what the party has defeated
+    this.critters = this.town ? townCritters(this, this.dungeon) : [];
     if (!this.town && !lv) this.spawnChests(wordsFor(this.pool));
   }
 
@@ -130,6 +139,10 @@ export class Room {
     for (const s of Object.values(this.savedPlayers)) { delete s.x; delete s.y; } // old map positions
     this.broadcast(this.dungeon.toMessage(this.floor, this.pool));
     this.say(this.town ? 'The surface' : `Floor ${this.floor}` + (this.cleared && how !== 'wipe' ? ' (cleared before: new enemies roam it)' : ''), 3);
+    if (this.town && this.zooNew.length) {
+      this.say(`New in the zoo: ${this.zooNew.join(', ')}!`, 4);
+      this.zooNew = [];
+    }
     if (this.players.size) this.save();
   }
 
@@ -280,7 +293,7 @@ export class Room {
     const dg = this.dungeon, from = opts.from || pl;
     const range = SPELL.homingRange * pl.reach, maxPath = Math.round(SPELL.homingPath * pl.reach);
     const cone = opts.any || pl.has('anyAim') ? -1.01 : SPELL.homingCone; // Bow of Artemis: any direction
-    const kinds = opts.kinds || ['proj', 'enemy', 'chest'];
+    const kinds = opts.kinds || ['proj', 'enemy', 'chest', 'critter'];
     let best = null, bestScore = Infinity;
     const consider = (kind, o) => {
       if (!kinds.includes(kind) || o === opts.skip) return;
@@ -291,17 +304,18 @@ export class Room {
       const path = dg.los(from.x, from.y, o.x, o.y) ? null : dg.findPath(from.x, from.y, o.x, o.y, maxPath);
       if (path === undefined) return; // no way around the walls
       const travel = path ? path.length : d;
-      const score = travel * (2 - Math.max(cos, 0)) * (kind === 'proj' ? 0.7 : kind === 'chest' ? 1.3 : 1);
+      const score = travel * (2 - Math.max(cos, 0)) * (kind === 'proj' ? 0.7 : kind === 'chest' || kind === 'critter' ? 1.3 : 1);
       if (score < bestScore) { bestScore = score; best = { kind, id: o.id }; }
     };
     for (const s of this.spells) if (!s.fromPlayer && s.letters === letter) consider('proj', s);
     for (const e of this.enemies) if (e.wants(letter)) consider('enemy', e);
     for (const c of this.chests) if (!c.open && c.lock.next === letter) consider('chest', c);
+    for (const c of this.critters) if (c.wants(letter)) consider('critter', c);
     return best;
   }
 
   findTarget({ kind, id }) {
-    const list = kind === 'proj' ? this.spells : kind === 'chest' ? this.chests : this.enemies;
+    const list = kind === 'proj' ? this.spells : kind === 'chest' ? this.chests : kind === 'critter' ? this.critters : this.enemies;
     return list.find(o => o.id === id);
   }
 
@@ -355,6 +369,7 @@ export class Room {
     for (const s of this.spells) s.update(this, now);
     this.resolveCollisions(alive, now);
     for (const c of this.chests) c.update(this, now);
+    for (const c of this.critters) c.update(this, now);
 
     this.spells = this.spells.filter(s => !s.removed);
     this.enemies = this.enemies.filter(e => !e.removed);
@@ -420,6 +435,14 @@ export class Room {
       if (result === 'done') this.openChest(c, s.owner);
       else this.emit({ t: result, x: c.x, y: c.y });
     }
+    // Player spell vs the surface's critters: feeding zoo animals, practice dummies and the fountain.
+    for (const s of playerSpells()) {
+      // a spell aimed at one critter flies past the others; a spell that found no target (a wrong letter) hits what it meets
+      const c = this.critters.find(c => s.distanceTo(c) <= c.hitRadius && (s.target ? s.target.kind === 'critter' && s.target.id === c.id : !c.renew));
+      if (!c) continue;
+      s.removed = true;
+      c.hitBy(this, s, now);
+    }
     // Enemy letter vs player.
     for (const s of enemySpells()) {
       if (!s.slowed && alive.some(p => p.trail.some(t => Math.hypot(t.x - s.x, t.y - s.y) < 0.7))) s.slowed = true; // Sleipnir
@@ -469,6 +492,8 @@ export class Room {
     }
     if (result !== 'done') return;
     e.removed = true; pl.kills++;
+    if (!this.bestiary[e.type]) this.zooNew.push({ slime: 'a Slime', mage: 'a Skeleton Mage', boss: 'the Bellwraith' }[e.type] || e.type);
+    this.bestiary[e.type] = (this.bestiary[e.type] | 0) + 1;
     this.emit({ t: 'kill', x: e.x, y: e.y, type: e.type });
     this.giveGold(pl, goldFor(e.type, this.floor));
     if (e.isBoss) this.bossDefeated(e, pl);
@@ -530,6 +555,7 @@ export class Room {
       enemies: this.enemies.map(e => e.snapshot()),
       chests: this.chests.map(c => c.snapshot()),
       items: this.items.map(f => f.snapshot()),
+      critters: this.critters.map(c => c.snapshot()),
       projs: this.spells.map(s => s.snapshot()),
     });
     for (const pl of this.players.values()) pl.sendState(base, this.events);
