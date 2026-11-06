@@ -5,11 +5,13 @@
 //      │                       ├─── Mage
 //      │                       └─── Boss (the Bellwraith)
 //      ├── Chest
+//      ├── Critter (zoo animals, practice dummies and the wishing fountain on the surface)
 //      ├── Spell
 //      └── FloorItem
 import { TS, prettyMorse } from './constants.js';
 import { drawWord } from './art/font.js';
 import { wizardSprite, enemySprite, chestSprite, itemSprite, wraithSprite, bellSprite } from './art/sprites.js';
+import { critterSprite } from './art/critters.js';
 import { MORSE } from './morse.js';
 
 export const ORB_LIFT = 8;      // px a spell's orb floats above its spot on the floor; hitboxes are drawn at this height
@@ -227,6 +229,62 @@ export class Chest extends Entity {
     if (d.open) return;
     if (Math.random() < 0.04) view.particles.sparkle(this.x + (Math.random() - 0.5) * 14 / TS, this.y, '#ffd54f');
     drawLabel(r, view, d, sx, sy - img.height - 8, { done: '#8a7a3f', next: '#ffffff', rest: '#ffd54f' });
+  }
+}
+
+// ------------------------------------------------------------------ surface critters
+
+/**
+ * Something friendly on the surface with a word to spell: a zoo animal (fed when you spell its letter), a
+ * practice dummy or the wishing fountain. Zoo slimes, mages and the Bellwraith reuse the dungeon's sprites.
+ */
+export class Critter extends Character {
+  get light() { return this.data.kind === 'fountain' ? { radius: 46, strength: 0.6 } : null; }
+  draw(r, view) {
+    const d = this.data;
+    if (d.kind === 'fountain') return this.drawFountain(r, view);
+    const ctx = r.ctx, { x: sx, y: sy } = r.toScreen(this.x, this.y);
+    let img, bob = 0, w, h;
+    if (d.kind === 'slime' || d.kind === 'mage') img = enemySprite(d.kind, d.flash, d.kind === 'mage' ? this.walkFrame : 0);
+    else if (d.kind === 'boss') { img = wraithSprite(d.flash, d.happy, 1); bob = Math.round(Math.sin(view.now / 350) * 2) + 3; }
+    else img = critterSprite(d.kind, d.flash);
+    w = img.width; h = img.height;
+    if (d.happy) bob += d.kind === 'dummy' ? 0 : Math.round(Math.abs(Math.sin(view.now / 90)) * 5); // a happy hop
+    else if (this.moving && d.kind !== 'boss') bob += Math.round(Math.abs(Math.sin(this.walkTime * (d.kind === 'hopper' ? 9 : 14))) * (d.kind === 'hopper' ? 4 : 1));
+    if (d.kind === 'slime' && !d.happy) { const sq = Math.sin(view.now / 300 + this.id) * 0.06; w = Math.round(w * (1 + sq)); h = Math.round(h * (1 - sq)); }
+    r.shadow(sx, sy, Math.min(8, Math.round(w / 2.5)));
+    const wobble = d.kind === 'dummy' && (d.happy || d.wrong) ? Math.round(Math.sin(view.now / 40) * 2) : 0;
+    r.drawFacing(img, sx + wobble, sy - h + 2 - bob, w, h, d.kind === 'dummy' ? 1 : this.face);
+    if (d.happy) {
+      if (d.kind !== 'dummy' && Math.random() < 0.15) view.particles.sparkle(this.x + (Math.random() - 0.5) * 0.6, this.y - 0.5, '#f48fb1');
+      return; // a new word comes once it is done being happy
+    }
+    const ly = sy - h - 10 - bob;
+    if (d.kind === 'boss') r.morseWord(d.word, d.p, sx, ly, false); // even in the zoo the Bellwraith's name is Morse only
+    else drawLabel(r, view, d, sx, ly, d.kind === 'dummy' ? { done: '#8a7a3f', next: '#ffd54f', rest: '#ffffff' } : { done: '#7c9a7e', next: '#f8bbd0', rest: '#ffffff' });
+  }
+  /** A round stone basin with a spout in the middle; the water ripples and the jet sparkles. */
+  drawFountain(r, view) {
+    const d = this.data, ctx = r.ctx, { x: sx, y: sy } = r.toScreen(this.x, this.y), t = view.now;
+    ctx.fillStyle = '#4a4560'; r.orb(sx, sy + 2, 24, 21); ctx.fill();               // the rim's shadow side
+    ctx.fillStyle = '#a7a3b8'; r.orb(sx, sy, 24, 20); ctx.fill();                   // stone rim
+    ctx.fillStyle = '#d6d2e4'; r.orb(sx, sy - 1, 23, 19); ctx.fill();
+    ctx.fillStyle = '#1e4f7a'; r.orb(sx, sy, 20, 16); ctx.fill();                   // the water
+    ctx.fillStyle = d.flash ? '#e1f5fe' : '#2f7fb5'; r.orb(sx, sy - 1, 18, 14); ctx.fill();
+    ctx.strokeStyle = '#80deea'; ctx.lineWidth = 1;
+    for (let k = 0; k < 2; k++) { // ripples spreading from the spout
+      const f = ((t / 1400) + k / 2) % 1;
+      ctx.globalAlpha = 1 - f; r.orb(sx, sy - 1, 4 + f * 14, 2 + f * 11); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#1a1020'; ctx.fillRect(sx - 3, sy - 15, 6, 15);               // the spout
+    ctx.fillStyle = '#a7a3b8'; ctx.fillRect(sx - 2, sy - 14, 4, 14);
+    ctx.fillStyle = '#d6d2e4'; ctx.fillRect(sx - 2, sy - 14, 1, 14);
+    ctx.fillStyle = '#1a1020'; ctx.fillRect(sx - 5, sy - 18, 10, 4);
+    ctx.fillStyle = '#d6d2e4'; ctx.fillRect(sx - 4, sy - 17, 8, 2);
+    if (Math.random() < 0.6) view.particles.trail(this.x + (Math.random() - 0.5) * 0.2, this.y - 0.9, '#b3e5fc');
+    if (d.happy && Math.random() < 0.4) view.particles.sparkle(this.x + (Math.random() - 0.5) * 2, this.y - 0.4, '#ffd54f');
+    if (!d.happy) drawLabel(r, view, d, sx, sy - 40, { done: '#4f7a8f', next: '#ffd54f', rest: '#b3e5fc' });
   }
 }
 

@@ -42,6 +42,12 @@ export class EventEffects {
       case 'chain': sfx('shatter'); for (let k = 0; k <= 8; k++) p.burst(e.x + (e.x2 - e.x) * k / 8, e.y + (e.y2 - e.y) * k / 8, '#b3e5fc', 2, 20, 0.4); break;
       case 'chip': p.burst(e.x, e.y, e.why === 'burn' ? '#ff7043' : '#ffd54f', 10, 40, 0.5); if (e.l) p.text(e.x, e.y - 1, e.l, e.why === 'burn' ? '#ff7043' : '#ffd54f'); break;
       case 'reflect': sfx('block'); p.burst(e.x, e.y, '#e0e0e0', 14, 50, 0.4); p.text(e.x, e.y, 'DEFLECT', '#e0e0e0'); break;
+      case 'feed': sfx('coin'); p.burst(e.x, e.y, '#f48fb1', 14, 40, 0.7); p.text(e.x, e.y - 0.6, 'YUM', '#f48fb1'); break;
+      case 'dummy':
+        sfx(e.best && e.n > 1 ? 'chest' : 'kill'); p.burst(e.x, e.y, '#e0b95a', 18, 50, 0.6);
+        if (e.id === this.getMyId()) p.text(e.x, e.y - 0.9, e.best && e.n > 1 ? 'BEST ' + e.n : 'STREAK ' + e.n, e.best && e.n > 1 ? '#ffd54f' : '#ffffff');
+        break;
+      case 'wish': sfx('chest'); p.burst(e.x, e.y, '#ffd54f', 30, 70, 1); p.burst(e.x, e.y, '#80deea', 30, 60, 1); break;
       case 'ward': sfx('ward'); p.burst(e.x, e.y, '#80deea', 16, 50, 0.5); p.text(e.x, e.y, 'WARD', '#80deea'); break;
     }
   }

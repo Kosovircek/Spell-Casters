@@ -2,6 +2,7 @@
 import { VIEW_W, VIEW_H, TS, WALL_H, AIM_KEYS } from './constants.js';
 import { makeCanvas, hash } from './art/canvas.js';
 import { TILES } from './art/tiles.js';
+import { fenceTile, lampTile } from './art/critters.js';
 import { arenaPlatform, arenaSky, drawTwinkles } from './art/arena.js';
 import { MORSE } from './morse.js';
 import { Player, Spell, ORB_LIFT } from './entities.js';
@@ -131,19 +132,28 @@ export class Renderer {
       const sx = i * TS + this.ox, sy = j * TS + this.oy;
       if (sx < -TS || sx > VIEW_W || sy < -TS || sy > VIEW_H + WALL_H + TS) continue;
       const t = map.tiles[j * map.w + i];
-      if (world.walkable(i, j) && !world.doorAt(i, j)) {
+      if (t === 12) ctx.drawImage(TILES.floor[Math.floor(hash(i, j) * 4)], sx, sy); // stone under the fountain's basin
+      else if (world.walkable(i, j) && !world.doorAt(i, j)) {
         const down = i === map.stairs.x && j === map.stairs.y, up = map.up && i === map.up.x && j === map.up.y;
         ctx.drawImage(down ? TILES.stairs : up ? TILES.upStairs : this.groundImage(t, i, j), sx, sy);
         if (down && state.stairsOpen) { ctx.globalAlpha = 0.35 + 0.25 * Math.sin(now / 200); ctx.fillStyle = '#ffd54f'; ctx.fillRect(sx + 2, sy + 2, 12, 12); ctx.globalAlpha = 1; }
       } else if (map.town || this.touchesFloor(world, i, j)) {
-        if (t === 4) ctx.drawImage(TILES.grass[Math.floor(hash(i, j) * 4)], sx, sy); // grass shows between the trees
+        if (t === 4 || t === 11 || t === 13) ctx.drawImage(this.groundImage(this.groundUnder(world, i, j), i, j), sx, sy); // ground shows around trees, fences and lamps
         walls.push({ d: j + 1, draw: () => this.drawWall(world, t, i, j, sx, sy, focus) });
       }
     }
     for (const door of map.doors || []) {
       walls.push({ d: door.y + 1.01, draw: () => { const p = this.toScreen(door.x + 0.5, door.y - 1); this.smallText(door.name, p.x, p.y - WALL_H + 4, '#ffd54f'); } });
     }
+    for (const sign of map.signs || []) { // the zoo's pens, the practice yard and the fountain
+      walls.push({ d: sign.y + 1.6, draw: () => { const p = this.toScreen(sign.x, sign.y); this.smallText(sign.text, p.x, p.y, sign.color); } });
+    }
     return walls;
+  }
+  /** What a fence or lamp stands on: the path or stone next to it if there is any, grass otherwise. */
+  groundUnder(world, i, j) {
+    for (const [a, b] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) { const n = world.tileAt(i + a, j + b); if (n === 1 || n === 3) return n; }
+    return 2;
   }
   groundImage(t, i, j) {
     if (t === 2) return TILES.grass[Math.floor(hash(i, j) * 4)];
@@ -160,6 +170,11 @@ export class Renderer {
     if (t === 5 || t === 7) { const b = TILES.house; return t === 7 ? b.door : hash(i, j + 3) > 0.5 ? b.window : b.plain; }
     if (t === 6 || t === 8) { const b = TILES.shop; return t === 8 ? b.door : hash(i, j + 3) > 0.4 ? b.window : b.plain; }
     if (t === 10) return TILES.arena.gate;
+    if (t === 11) { // a fence: rails run toward the fences next to it
+      const f = (a, b) => world.tileAt(a, b) === 11;
+      return fenceTile((f(i, j - 1) ? 1 : 0) | (f(i + 1, j) ? 2 : 0) | (f(i, j + 1) ? 4 : 0) | (f(i - 1, j) ? 8 : 0));
+    }
+    if (t === 13) return this.lampImg || (this.lampImg = lampTile());
     if (t === 9) { // sand inside, a stone rim round the edge; the front wall alternates arches and banners
       const inArena = (a, b) => { const n = world.tileAt(a, b); return n === 9 || n === 10; };
       if (inArena(i - 1, j) && inArena(i + 1, j) && inArena(i, j - 1) && inArena(i, j + 1)) return TILES.arena.sand;
@@ -172,7 +187,7 @@ export class Renderer {
   /** A raised block is WALL_H tall: its top sits up the screen and its front face covers its own square. */
   drawWall(world, t, i, j, sx, sy, focus) {
     const { ctx } = this;
-    const nearPlayer = j + 1 > focus.y && j - focus.y < 1.5 && Math.abs(i + 0.5 - focus.x) < 1.6;
+    const nearPlayer = t !== 11 && j + 1 > focus.y && j - focus.y < 1.5 && Math.abs(i + 0.5 - focus.x) < 1.6;
     if (nearPlayer) ctx.globalAlpha = 0.45; // see-through when it stands in front of you
     ctx.drawImage(this.blockImage(world, t, i, j), sx, sy - WALL_H);
     if (t === 0) {
@@ -201,6 +216,7 @@ export class Renderer {
     if (world.state.stairsOpen) light(world.map.stairs.x + 0.5, world.map.stairs.y + 0.5, 60, 0.9);
     if (world.map.up) light(world.map.up.x + 0.5, world.map.up.y + 0.5, 36, 0.7); // the way back up is always lit
     for (const door of world.map.doors || []) light(door.x + 0.5, door.y + 0.6, 50, 0.8); // lanterns by the doors
+    for (const [x, y] of world.map.lamps || []) light(x + 0.5, y - 0.1, 56, 0.85);         // lamp posts
     this.ctx.drawImage(this.dark, 0, 0);
   }
 
