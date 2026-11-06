@@ -3,7 +3,8 @@
 //   Entity ── Actor ── Player
 //      │         └──── Enemy ── Slime
 //      │                   ├─── Mage
-//      │                   └─── Boss (the Bellwraith, one per floor)
+//      │                   ├─── Creature (every other kind, from bestiary.js; the rare ones in monsters.js)
+//      │                   └─── Boss ── Bellwraith (the other bosses are in bosses.js)
 //      ├── Chest
 //      ├── Spell ── PlayerSpell
 //      │      └──── EnemySpell
@@ -12,6 +13,7 @@ import { DT, PLAYER, SPELL, LEVELS, GOLD } from './config.js';
 import { xpToNext, baseHp, armorFactor, letterDamage } from './progression.js';
 import { rnd, pick } from './util.js';
 import * as Items from './items.js';
+import { def, PACE } from './bestiary.js';
 
 let lastId = 0;
 export const newId = () => ++lastId;
@@ -100,6 +102,7 @@ export class Player extends Actor {
     this.pearlUsed = false;             // Pearl of the Dragon King, once per floor
     this.draupnir = 0;                  // kills counted toward Draupnir's potion
     this.trail = [];                    // Horseshoes of Sleipnir: recent footsteps
+    this.frozenUntil = 0;               // a Frost Wisp's letter froze this caster in place
     this.practiceStreak = 0;            // practice yard: words spelled in a row without a wrong letter
     this.practiceBest = 0;              // ...and the best streak ever (saved)
     this.pack = [];                     // inventory a) .. l)
@@ -153,6 +156,7 @@ export class Player extends Actor {
   get luck() { return this.stats.luck; }
   get maxLetters() { return this.stats.letters || SPELL.maxLetters; }
   get moveSpeed() {
+    if (this.frozenUntil > Date.now()) return 0;
     return PLAYER.speed * (this.swiftUntil > Date.now() ? 1.5 : 1) * (1 + LEVELS.speedPerLevel * (this.level - 1) + this.stats.speed);
   }
   get spellSpeed() { return SPELL.speed * (1 + this.stats.haste); }
@@ -239,13 +243,16 @@ export class Player extends Actor {
     }
   }
 
-  /** An enemy letter struck this player. Shields, wards and some gear may stop it; armor shrinks the rest. */
+  /**
+   * An enemy letter struck this player. Shields, wards and some gear may stop it; armor shrinks the rest.
+   * Returns true if it got through and hurt.
+   */
   takeHit(room, now, spell) {
-    if (this.blockSet.has(spell.letters)) { room.emit({ t: 'sblock', x: this.x, y: this.y, l: spell.letters }); return; }
-    if (this.ward > 0) { this.ward--; room.emit({ t: 'ward', x: this.x, y: this.y }); return; }
-    if (this.has('reflect') && Math.random() < 0.25) { room.emit({ t: 'reflect', x: this.x, y: this.y }); return; }
+    if (spell.letters && this.blockSet.has(spell.letters)) { room.emit({ t: 'sblock', x: this.x, y: this.y, l: spell.letters }); return false; }
+    if (this.ward > 0) { this.ward--; room.emit({ t: 'ward', x: this.x, y: this.y }); return false; }
+    if (this.has('reflect') && Math.random() < 0.25) { room.emit({ t: 'reflect', x: this.x, y: this.y }); return false; }
     this.lastHitAt = now;
-    if (this.has('pelt') && now >= this.peltAt) { this.peltAt = now + 10000; room.emit({ t: 'pelt', x: this.x, y: this.y }); return; }
+    if (this.has('pelt') && now >= this.peltAt) { this.peltAt = now + 10000; room.emit({ t: 'pelt', x: this.x, y: this.y }); return false; }
     let dmg = spell.damage * rnd(0.75, 1.25) * armorFactor(this.stats.armor) * (1 + this.stats.hurtMult);
     const moving = Math.hypot(this.mx, this.my) > 0.1;
     if ((this.has('still') && !moving) || (this.has('moving') && moving)) dmg *= 0.7;
@@ -265,6 +272,7 @@ export class Player extends Actor {
       room.emit({ t: 'down', x: this.x, y: this.y, id: this.id });
       room.say(`${this.name} is down!`, 2);
     }
+    return true;
   }
 
   // ---- saving: what a player keeps when the lobby is saved and resumed
@@ -300,7 +308,7 @@ export class Player extends Actor {
       lv: this.level, xp: this.xp, xpNext: this.level >= LEVELS.max ? 0 : xpToNext(this.level),
       hurt: this.hurt > 0, respawn: this.dead ? Math.max(0, Math.ceil((this.respawnAt - now) / 1000)) : 0,
       kills: this.kills, blocks: this.blocks, hidden: this.vanishUntil > now, gold: this.gold,
-      swift: this.swiftUntil > now ? Math.ceil((this.swiftUntil - now) / 1000) : 0, ward: this.ward,
+      swift: this.swiftUntil > now ? Math.ceil((this.swiftUntil - now) / 1000) : 0, ward: this.ward, frozen: this.frozenUntil > now,
       stats: {
         armor: st.armor, cut: Math.round((1 - armorFactor(st.armor)) * 100), speed: Math.round(this.moveSpeed / PLAYER.speed * 100),
         luck: st.luck, letters: this.maxLetters, haste: Math.round(st.haste * 100), reach: Math.round(st.reach * 100),
@@ -315,7 +323,16 @@ export class Player extends Actor {
 
 // ------------------------------------------------------------------ enemies
 
-/** Base enemy: walks toward the nearest visible player, keeps its distance and throws letters. */
+const VOLLEYS = {
+  one: [0], two: [-0.12, 0.12], fan3: [-0.35, 0, 0.35],
+  ring4: [0, 1, 2, 3].map(k => k * Math.PI / 2), ring6: [0, 1, 2, 3, 4, 5].map(k => k * Math.PI / 3),
+};
+
+/**
+ * Base enemy: walks toward the nearest visible player, keeps its distance and throws letters.
+ * How fast it walks, how far it stays and how it shoots come from its line in bestiary.js.
+ * The rare enemies and the bosses add their tricks through the hooks (think, onDefeated, onLetterHit...).
+ */
 export class Enemy extends Actor {
   constructor(x, y, word) {
     super(x, y, 0.32);
@@ -326,17 +343,25 @@ export class Enemy extends Actor {
     this.stunUntil = 0;  // staggered or stunned: no walking, no attacks
     this.burnAt = 0;     // Laevateinn: loses one more letter at this time
     this.burnBy = null;
+    this.jx = 0; this.jy = 0; this.jitterAt = 0; // 'erratic' and 'skitter' movers: current wobble and when it changes
+    this.roused = false; // 'perch' movers: has someone come close yet?
   }
   // Overridden by subclasses
   get type() { return 'enemy'; }
-  get walkSpeed() { return 0.8; }
-  get preferredDistance() { return 4; }
+  get def() { return def(this.type); }
+  get name() { return this.def.name; }
+  get walkSpeed() { return this.def.speed ?? 0.8; }
+  get preferredDistance() { return this.def.dist ?? 4; }
   get hitRadius() { return 0.55; }
   get isBoss() { return false; }
-  nextFireDelay(floor) { return rnd(4, 7); }
+  /** Spells fly straight through me right now (a faded Phantom, a downed Gremlin). */
+  get intangible() { return false; }
+  /** Item effects that take letters off by themselves (burn, echo, chain...) cannot reach me right now. */
+  get guarded() { return false; }
+  nextFireDelay(floor) { const [a, b] = this.def.fire || [4, 7]; return rnd(a, b) * Math.max(0.6, 1 - (floor - 1) * 0.015); }
   /** Can a spell starting with this letter hurt me right now? (used for soft aim) */
-  wants(letter) { return this.lock.next === letter; }
-  /** A player spell hit me. Returns 'done', 'hit' or 'wrong' (bosses have a few more). */
+  wants(letter) { return !this.intangible && this.lock.next === letter; }
+  /** A player spell hit me. Returns 'done', 'hit' or 'wrong' (bosses and rare enemies have a few more). */
   hitBy(room, spell) { return this.lock.apply(spell.letters); }
   get stunned() { return this.stunUntil > Date.now(); }
   /** Stagger or stun for ms. kind is only for the effect shown. */
@@ -345,85 +370,128 @@ export class Enemy extends Actor {
     this.stunUntil = Math.max(this.stunUntil, now + ms);
     room.emit({ t: 'stun', x: this.x, y: this.y, kind });
   }
+
+  // ---- hooks for the rare enemies and bosses
+  /** Every tick, before anything else (also while stunned or asleep). */
+  think(room, now) {}
+  /** My word was finished: I am about to be removed. */
+  onDefeated(room, pl, now) {}
+  /** One of my letters got through to a caster and hurt. */
+  onLetterHit(room, pl, now) {}
+  /** A caster blocked one of my letters in mid-air. */
+  onBlocked(room, pl, now) {}
+  /** Extra things the client needs to draw me (a hidden name, a timer...). */
+  label(now) { return {}; }
+
+  // ---- attacking
   /** One of my letters, flying at a player. */
   makeLetter(room, x, y, vx, vy) {
     return new EnemySpell(x, y, pick(room.pool), vx, vy, letterDamage(this.type, room.floor), this);
   }
-  /** Throw one letter at the target, if the room's shot budget allows. */
+  letterSpeed(room) { return Math.min(1.8 + room.floor * 0.2, 3.5) * (PACE[this.def.pace] || 1); }
+  /** Throw one letter at angle a (radians). */
+  throwAt(room, a, speed = this.letterSpeed(room)) {
+    const dx = Math.cos(a), dy = Math.sin(a);
+    room.spells.push(this.makeLetter(room, this.x + dx * 0.4, this.y + dy * 0.4, dx * speed, dy * speed));
+  }
+  /** One volley at the target, if the room's shot budget allows. A volley costs one shot, however many letters it has. */
   attack(room, ux, uy, shots) {
-    if (shots.left <= 0) return;
+    const angles = VOLLEYS[this.def.shot || 'one'];
+    if (!angles || shots.left <= 0) return;
+    if (angles.length > 1 && room.spells.filter(s => !s.fromPlayer).length > 10 + room.players.size * 3) return;
     shots.left--;
-    const speed = Math.min(1.8 + room.floor * 0.2, 3.5);
-    room.spells.push(this.makeLetter(room, this.x + ux * 0.4, this.y + uy * 0.4, ux * speed, uy * speed));
+    const base = Math.atan2(uy, ux);
+    for (const a of angles) this.throwAt(room, base + a);
     room.emit({ t: 'ecast', x: this.x, y: this.y });
+  }
+
+  // ---- moving
+  /** Which way to walk this tick (before keeping space from other enemies). u = unit vector to the target. */
+  moveVector(room, target, td, ux, uy, now) {
+    const move = this.def.move || 'keep';
+    if (move === 'still') return [0, 0];
+    if (move === 'perch' && !this.roused) {
+      if (td > 4) return [0, 0];
+      this.roused = true; room.emit({ t: 'rouse', x: this.x, y: this.y });
+    }
+    const want = this.preferredDistance;
+    let vx = 0, vy = 0;
+    if (td > want + 0.5) { vx = ux; vy = uy; }
+    else if (td < want - 1.5) { vx = -ux; vy = -uy; }
+    else { vx = -uy * this.strafe * 0.6; vy = ux * this.strafe * 0.6; if (Math.random() < 0.01) this.strafe *= -1; }
+    if (move === 'erratic' || move === 'skitter') {
+      if (now >= this.jitterAt) {
+        const a = Math.random() * Math.PI * 2;
+        const still = move === 'skitter' && Math.random() < 0.35; // skitterers freeze for a moment now and then
+        this.jx = still ? -vx : Math.cos(a); this.jy = still ? -vy : Math.sin(a);
+        this.jitterAt = now + rnd(250, move === 'skitter' ? 600 : 900);
+      }
+      vx += this.jx * 0.9; vy += this.jy * 0.9;
+    }
+    return [vx, vy];
   }
 
   /** shots = { left } shared budget so the screen never fills with enemy letters. */
   update(room, now, alive, shots) {
     this.lock.tick();
     if (this.burnAt && now >= this.burnAt) { const by = this.burnBy; this.burnAt = 0; this.burnBy = null; room.chip(this, by, 'burn'); }
-    if (this.stunUntil > now) return;
+    this.think(room, now, alive);
+    if (this.removed || this.stunUntil > now) return;
     let target = null, td = Infinity;
     for (const pl of alive) {
       const d = this.distanceTo(pl);
       if (d < td && pl.visibleFrom(d, now) && room.dungeon.los(this.x, this.y, pl.x, pl.y)) { td = d; target = pl; }
     }
     if (!target) return;
-    if (!this.awake) { this.awake = true; this.fireCd = rnd(1.5, 3); }
+    if (!this.awake) { this.awake = true; this.fireCd = rnd(1.5, 3); this.wake(room, now); }
 
     const ux = (target.x - this.x) / td, uy = (target.y - this.y) / td;
-    let vx = 0, vy = 0;
-    const want = this.preferredDistance;
-    if (td > want + 0.5) { vx = ux; vy = uy; }
-    else if (td < want - 1.5) { vx = -ux; vy = -uy; }
-    else { vx = -uy * this.strafe * 0.6; vy = ux * this.strafe * 0.6; if (Math.random() < 0.01) this.strafe *= -1; }
+    let [vx, vy] = this.moveVector(room, target, td, ux, uy, now);
     for (const o of room.enemies) { // keep a little space from other enemies
       if (o === this) continue;
       const d = this.distanceTo(o);
       if (d < 1 && d > 0.001) { vx -= (o.x - this.x) / d; vy -= (o.y - this.y) / d; }
     }
+    const m = Math.hypot(vx, vy);
+    if (m > 1.6) { vx *= 1.6 / m; vy *= 1.6 / m; }
     this.moveBy(room.dungeon, vx * this.walkSpeed * DT, vy * this.walkSpeed * DT);
 
-    this.fireCd -= DT;
+    // a Warhorn Goblin nearby makes everyone around it throw twice as fast
+    const horn = room.enemies.some(o => o.horn && o !== this && !o.removed && o.distanceTo(this) < 5);
+    this.fireCd -= DT * (horn ? 2 : 1);
     if (this.fireCd <= 0) {
       this.fireCd = this.nextFireDelay(room.floor);
-      this.attack(room, ux, uy, shots);
+      this.attack(room, ux, uy, shots, target, now);
     }
   }
-  snapshot() { return { ...super.snapshot(), type: this.type, ...this.lock.snapshot(), awake: this.awake, stun: this.stunned, burn: !!this.burnAt }; }
-  toSave() { return { type: this.type, x: this.x, y: this.y, lock: this.lock.toSave() }; }
-  static fromSave(s) {
-    if (s.type === 'boss') return Boss.fromSave(s);
-    const e = s.type === 'mage' ? new Mage(s.x, s.y, s.lock.word) : new Slime(s.x, s.y, s.lock.word);
-    e.lock = WordLock.fromSave(s.lock);
-    return e;
+  /** Called once, when I first see a caster. */
+  wake(room, now) {}
+  snapshot() {
+    return { ...super.snapshot(), type: this.type, ...this.lock.snapshot(), awake: this.awake, stun: this.stunned, burn: !!this.burnAt, ...this.label(Date.now()) };
   }
+  toSave() { return { type: this.type, x: this.x, y: this.y, lock: this.lock.toSave() }; }
 }
 
 /** Slow, close-range, single letter, rarely shoots. */
 export class Slime extends Enemy {
   get type() { return 'slime'; }
-  get walkSpeed() { return 0.9; }
-  get preferredDistance() { return 3.5; }
-  nextFireDelay() { return rnd(6, 9); }
 }
 
 /** Skeleton mage: keeps its distance, shoots more often, may carry a whole word. */
 export class Mage extends Enemy {
   get type() { return 'mage'; }
-  get walkSpeed() { return 0.7; }
-  get preferredDistance() { return 5; }
   nextFireDelay(floor) { return rnd(3.5, 6) - Math.min(floor * 0.3, 2); }
 }
 
+/** Any everyday enemy from the bestiary that needs no tricks of its own: everything about it comes from its table line. */
+export class Creature extends Enemy {
+  constructor(type, x, y, word) { super(x, y, word); this.breed = type; }
+  get type() { return this.breed; }
+}
+
 /**
- * The Bellwraith, guardian of the stairs. One per floor.
- *  - Its name is never written in letters: above it you only see the Morse code, so you have to read it.
- *  - A bell shield blocks every spell. The wraith rings one letter on its bell in Morse, over and over.
- *    Listen (or watch the bell flash), then cast that letter at it to shatter the shield.
- *    Extra letters in the same spell carry on into its name (cast "T"+"EA" to shatter and hit at once).
- *  - While the shield is down it is stunned for a few seconds, then the shield comes back with a new letter.
- *  - Its name has several words (phases). Finish one and it summons slimes and gets angrier.
+ * Base of every boss: a name of several words (phases), a bigger body, and a line for the boss bar.
+ * One guards the stairs room of every floor; which one depends on the depth (see spawner.js).
  */
 export class Boss extends Enemy {
   constructor(x, y, words) {
@@ -431,19 +499,66 @@ export class Boss extends Enemy {
     this.radius = 0.45;
     this.words = words;
     this.phase = 0;
-    this.shield = true;
-    this.chant = null;   // letter rung on the bell while shielded
-    this.openT = 0;      // seconds left with the shield broken
     this.volleys = 0;
     this.fireCd = 3;
   }
-  get type() { return 'boss'; }
   get isBoss() { return true; }
   get hitRadius() { return 0.8; }
-  get walkSpeed() { return this.openT > 0 ? 0.15 : 0.45 + this.phase * 0.15; }
   get preferredDistance() { return 4.5; }
+  /** What to do right now, for the boss bar. */
+  get hint() { return ''; }
+  /** Too many letters in the air already? Bosses hold back then. */
+  crowded(room) { return room.spells.filter(s => !s.fromPlayer).length > 8 + room.players.size * 2; }
+  /** n letters spread around angle `base`, `gap` radians apart. */
+  fan(room, base, n, gap, speed) { for (let k = 0; k < n; k++) this.throwAt(room, base + (k - (n - 1) / 2) * gap, speed); }
+  /** n letters in a ring. */
+  ring(room, n, speed, turn = 0) { for (let k = 0; k < n; k++) this.throwAt(room, turn + k * 2 * Math.PI / n, speed); }
+  /** Move on to my next name. Returns true when that was the last one. */
+  nextName() {
+    this.phase++;
+    if (this.phase >= this.words.length) return true;
+    this.lock = new WordLock(this.words[this.phase]);
+    return false;
+  }
+  /** Call a few helpers around me. */
+  summon(room, n, make) {
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * Math.PI * 2, r = rnd(1.3, 2.2);
+      const x = this.x + Math.cos(a) * r, y = this.y + Math.sin(a) * r;
+      if (!room.dungeon.blocked(x, y, 0.32)) { const e = make(x, y); e.awake = true; room.enemies.push(e); }
+    }
+  }
+  snapshot() { return { ...super.snapshot(), boss: true, name: this.name, hint: this.hint, guard: this.guarded, phase: this.phase, phases: this.words.length }; }
+  toSave() { return { ...super.toSave(), words: this.words, phase: this.phase }; }
+  /** Carry on from a save (the constructor already got the words). */
+  restore(s) {
+    this.phase = Math.min(s.phase | 0, this.words.length - 1);
+    this.lock = WordLock.fromSave(s.lock);
+  }
+}
+
+/**
+ * The Bellwraith, the first guardian of the stairs.
+ *  - Its name is never written in letters: above it you only see the Morse code, so you have to read it.
+ *  - A bell shield blocks every spell. The wraith rings one letter on its bell in Morse, over and over.
+ *    Listen (or watch the bell flash), then cast that letter at it to shatter the shield.
+ *    Extra letters in the same spell carry on into its name (cast "T"+"EA" to shatter and hit at once).
+ *  - While the shield is down it is stunned for a few seconds, then the shield comes back with a new letter.
+ *  - Its name has several words (phases). Finish one and it summons slimes and gets angrier.
+ */
+export class Bellwraith extends Boss {
+  constructor(x, y, words) {
+    super(x, y, words);
+    this.shield = true;
+    this.chant = null;   // letter rung on the bell while shielded
+    this.openT = 0;      // seconds left with the shield broken
+  }
+  get type() { return 'boss'; }
+  get guarded() { return this.shield; }
+  get walkSpeed() { return this.openT > 0 ? 0.15 : 0.45 + this.phase * 0.15; }
   nextFireDelay(floor) { return Math.max(1.6, 3.6 - this.phase * 0.5 - floor * 0.1); }
   wants(letter) { return this.shield ? letter === this.chant : this.lock.next === letter; }
+  get hint() { return this.shield ? 'Bell shield up: cast the letter its bell rings' : `Shield broken for ${Math.max(0, Math.ceil(this.openT))}s: spell the Morse name above it`; }
 
   raiseShield(room) {
     this.shield = true;
@@ -452,34 +567,22 @@ export class Boss extends Enemy {
     this.chant = c;
   }
 
-  update(room, now, alive, shots) {
+  think(room) {
     if (!this.chant) this.chant = pick(room.pool);
     if (this.openT > 0) {
       this.openT -= DT;
       if (this.openT <= 0) { this.raiseShield(room); room.emit({ t: 'bshield', x: this.x, y: this.y }); }
     }
-    super.update(room, now, alive, shots);
   }
 
   /** Fans of letters, and every third volley a ring. Stunned (no attacks) while the shield is broken. */
   attack(room, ux, uy) {
-    if (!this.shield) return;
-    const inFlight = room.spells.filter(s => !s.fromPlayer).length;
-    if (inFlight > 8 + room.players.size * 2) return;
+    if (!this.shield || this.crowded(room)) return;
     const speed = Math.min(1.7 + room.floor * 0.15, 3);
     this.volleys++;
-    const shoot = (a) => {
-      const dx = Math.cos(a), dy = Math.sin(a);
-      room.spells.push(this.makeLetter(room, this.x + dx * 0.6, this.y + dy * 0.6, dx * speed, dy * speed));
-    };
     const base = Math.atan2(uy, ux);
-    if (this.phase > 0 && this.volleys % 3 === 0) {
-      const n = 6 + this.phase * 2;
-      for (let k = 0; k < n; k++) shoot(base + k * 2 * Math.PI / n);
-    } else {
-      const n = 3 + this.phase;
-      for (let k = 0; k < n; k++) shoot(base + (k - (n - 1) / 2) * 0.32);
-    }
+    if (this.phase > 0 && this.volleys % 3 === 0) this.ring(room, 6 + this.phase * 2, speed, base);
+    else this.fan(room, base, 3 + this.phase, 0.32, speed);
     room.emit({ t: 'ecast', x: this.x, y: this.y });
   }
 
@@ -496,30 +599,17 @@ export class Boss extends Enemy {
     }
     const result = this.lock.apply(letters);
     if (result !== 'done') return result;
-    this.phase++;
-    if (this.phase >= this.words.length) return 'done';
+    if (this.nextName()) return 'done';
     // next word: the wraith shrieks, summons help and puts its shield back up
-    this.lock = new WordLock(this.words[this.phase]);
     this.raiseShield(room);
-    for (let k = 0; k < 2; k++) {
-      const a = Math.random() * Math.PI * 2;
-      const x = this.x + Math.cos(a) * 1.5, y = this.y + Math.sin(a) * 1.5;
-      if (!room.dungeon.blocked(x, y, 0.32)) room.enemies.push(new Slime(x, y, pick(room.pool)));
-    }
+    this.summon(room, 2, (x, y) => new Slime(x, y, pick(room.pool)));
     room.emit({ t: 'bphase', x: this.x, y: this.y });
     room.say(`The Bellwraith shrieks! ${this.words.length - this.phase} name${this.words.length - this.phase > 1 ? 's' : ''} left`, 3);
     return 'phase';
   }
 
   snapshot() {
-    return { ...super.snapshot(), phase: this.phase, phases: this.words.length, shield: this.shield, chant: this.chant, open: Math.max(0, Math.ceil(this.openT)) };
-  }
-  toSave() { return { ...super.toSave(), words: this.words, phase: this.phase }; }
-  static fromSave(s) {
-    const b = new Boss(s.x, s.y, s.words);
-    b.phase = Math.min(s.phase | 0, s.words.length - 1);
-    b.lock = WordLock.fromSave(s.lock);
-    return b;
+    return { ...super.snapshot(), shield: this.shield, chant: this.chant, open: Math.max(0, Math.ceil(this.openT)), morse: true };
   }
 }
 
@@ -597,7 +687,7 @@ export class PlayerSpell extends Spell {
   update(room, now) {
     if (this.target) {
       const t = room.findTarget(this.target);
-      if (t && !t.removed && !t.open) this.steer(room, t);
+      if (t && !t.removed && !t.open && !t.intangible) this.steer(room, t); // a faded Phantom is not there to aim at
       else this.target = null;
     }
     super.update(room, now);

@@ -1,4 +1,5 @@
 // Turns server events (hits, blocks, chest opened...) into sounds, sparks and floating text.
+import { MONSTERS } from './art/monsters.js';
 export class EventEffects {
   constructor({ audio, particles, renderer, getMyId }) {
     this.audio = audio; this.particles = particles; this.renderer = renderer; this.getMyId = getMyId;
@@ -10,7 +11,35 @@ export class EventEffects {
       case 'ecast': sfx('ecast'); break;
       case 'block': sfx('block'); p.burst(e.x, e.y, '#fff59d', 16, 60, 0.6); p.text(e.x, e.y, e.cut ? 'CUT' : 'BLOCK', '#fff59d'); break;
       case 'hit': sfx('hit'); p.burst(e.x, e.y, '#ffd54f', 8); break;
-      case 'kill': sfx('kill'); p.burst(e.x, e.y, e.type === 'slime' ? '#66bb6a' : e.type === 'boss' ? '#80deea' : '#b39ddb', 24, 70, 0.8); break;
+      case 'kill': sfx('kill'); p.burst(e.x, e.y, e.type === 'slime' ? '#66bb6a' : e.type === 'boss' ? '#80deea' : MONSTERS[e.type]?.burst || '#b39ddb', 24, 70, 0.8); break;
+      // ---- the rare enemies' tricks
+      case 'mimic': sfx('shatter'); p.burst(e.x, e.y, '#ffd54f', 20, 60, 0.6); p.text(e.x, e.y - 1, 'MIMIC!', '#ff5252'); this.renderer.shake = 4; break;
+      case 'split': sfx('phase'); p.burst(e.x, e.y, '#ffa726', 20, 50, 0.6); p.text(e.x, e.y - 1, 'SPLIT', '#ffa726'); break;
+      case 'steal': sfx('coin'); p.text(e.x, e.y - 1, 'STOLEN', '#ffd54f'); break;
+      case 'jumble': p.burst(e.x, e.y, '#f06292', 8, 30, 0.4); break;
+      case 'mock': sfx('wrong'); p.text(e.x, e.y - 1.2, '+' + e.l, '#ef5350'); break;
+      case 'boom': sfx('bossdown'); p.burst(e.x, e.y, '#ff7043', 60, 130, 0.9); p.burst(e.x, e.y, '#ffeb3b', 30, 90, 0.6); this.renderer.shake = 9; break;
+      case 'kblock': sfx('wrong'); p.text(e.x, e.y - 1, 'KEY ' + e.l, '#ffca28'); break;
+      case 'unlock': sfx('block'); p.burst(e.x, e.y, '#ffca28', 12, 40, 0.5); break;
+      case 'regrow': p.burst(e.x, e.y, e.why === 'sip' ? '#ff1744' : '#9ccc65', 8, 30, 0.5); p.text(e.x, e.y - 1, (e.why === 'sip' ? 'SIP ' : '+') + (e.l || ''), e.why === 'sip' ? '#ff5252' : '#9ccc65'); break;
+      case 'gdown': sfx('kill'); p.burst(e.x, e.y, '#7e57c2', 14, 40, 0.6); break;
+      case 'grevive': sfx('shield'); p.burst(e.x, e.y, '#c6ff00', 16, 50, 0.6); p.text(e.x, e.y - 1, 'BACK UP', '#c6ff00'); break;
+      case 'hatch': p.burst(e.x, e.y, '#f5f5f5', 10, 30, 0.5); break;
+      case 'mreflect': sfx('block'); p.burst(e.x, e.y, '#e1f5fe', 14, 50, 0.4); p.text(e.x, e.y - 1, 'MIRROR ' + e.l, '#e1f5fe'); break;
+      case 'horn': sfx('ecast'); p.burst(e.x, e.y, '#ffb74d', 16, 60, 0.6); break;
+      case 'freeze': sfx('shield'); p.burst(e.x, e.y, '#b3e5fc', 16, 40, 0.6); p.text(e.x, e.y, 'FROZEN', '#b3e5fc'); break;
+      case 'rouse': sfx('ecast'); p.burst(e.x, e.y, '#78909c', 12, 40, 0.5); break;
+      // ---- the bosses' tricks
+      case 'graves': sfx('phase'); p.burst(e.x, e.y, '#b0bec5', 40, 90, 1); this.renderer.shake = 5; break;
+      case 'gopen': sfx('shatter'); p.burst(e.x, e.y, '#ffca28', 30, 70, 0.8); p.text(e.x, e.y - 1, 'EXPOSED', '#ffca28'); break;
+      case 'gblock': sfx('wrong'); p.burst(e.x, e.y, '#b0bec5', 8, 40, 0.4); p.text(e.x, e.y - 1, 'GUARDED', '#b0bec5'); break;
+      case 'hcut': sfx('shatter'); p.burst(e.x, e.y - 1, '#43a047', 30, 80, 0.8); p.text(e.x, e.y - 1.5, 'HEAD CUT', '#c5e1a5'); this.renderer.shake = 4; break;
+      case 'hgrow': sfx('shield'); p.burst(e.x, e.y - 1, '#43a047', 16, 50, 0.6); break;
+      case 'slam': sfx('bossdown'); p.burst(e.x, e.y, '#ffe082', 50, 110, 0.9); this.renderer.shake = 8; break;
+      case 'echo': sfx('shield'); p.burst(e.x, e.y, '#b39ddb', 30, 70, 0.8); break;
+      case 'eshatter': sfx('shatter'); p.burst(e.x, e.y, '#e1f5fe', 40, 90, 0.8); p.text(e.x, e.y - 1, 'ECHO', '#e1f5fe'); break;
+      case 'eshuffle': sfx('cloak'); p.burst(e.x, e.y, '#b39ddb', 20, 60, 0.5); break;
+      case 'reveal': sfx('chest'); p.burst(e.x, e.y, '#ff5252', 16, 50, 0.6); p.text(e.x, e.y - 1.5, 'REVEALED ' + e.l, '#ffffff'); break;
       case 'bblock': sfx('wrong'); p.burst(e.x, e.y, '#80deea', 8, 40, 0.4); p.text(e.x, e.y - 1, 'SHIELD', '#80deea'); break;
       case 'bshatter': sfx('shatter'); p.burst(e.x, e.y, '#80deea', 40, 90, 0.9); p.text(e.x, e.y - 1, 'SHATTER ' + e.l, '#ffffff'); this.renderer.shake = 5; break;
       case 'bshield': sfx('shield'); p.burst(e.x, e.y, '#80deea', 20, 50, 0.6); break;

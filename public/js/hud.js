@@ -102,17 +102,15 @@ export class Hud {
     this.setHtml(el, `<div class="bn duelists">${side(bySide[0])}<span>VS</span>${side(bySide[1])}</div><div class="bh">${escapeHtml(how)}</div>`);
   }
 
-  // ---- boss bar (bottom centre) while the Bellwraith is awake
+  // ---- boss bar (bottom centre) while the floor's boss is awake
   renderBoss(state) {
-    const b = (state.enemies || []).find(e => e.type === 'boss');
+    const b = (state.enemies || []).find(e => e.boss);
     const el = $('bossbar');
     el.classList.remove('duel');
     if (!b || !b.awake) { el.hidden = true; return; }
     el.hidden = false;
     const pips = Array.from({ length: b.phases }, (_, i) => `<span class="${i < b.phase ? 'gone' : i === b.phase ? 'cur' : ''}">◆</span>`).join('');
-    const how = b.shield ? 'Bell shield up: cast the letter its bell rings'
-      : `Shield broken for ${b.open}s: spell the Morse name above it`;
-    this.setHtml(el, `<div class="bn">THE BELLWRAITH <span class="pips">${pips}</span></div><div class="bh ${b.shield ? 'sh' : 'op'}">${how}</div>`);
+    this.setHtml(el, `<div class="bn">${escapeHtml((b.name || 'The Bellwraith').toUpperCase())} <span class="pips">${pips}</span></div><div class="bh ${b.guard ? 'sh' : 'op'}">${escapeHtml(b.hint || '')}</div>`);
   }
 
   // ---- Morse input box

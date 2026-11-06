@@ -3,14 +3,15 @@
 // Floors are persistent, like in Angband: the surface town is floor 0, and every floor below keeps its
 // layout, its chests (opened or not) and whatever lies on the ground when the party leaves. Only the enemies
 // come back: a floor gets new ones, as tough as its depth, every time the party arrives. Once a floor has
-// been cleared (its Bellwraith too) its stairs down stay open and its Bellwraith stays gone.
+// been cleared (its boss too) its stairs down stay open and its boss stays gone.
 // The whole party is always on the same floor: stairs, recall and descent scrolls take everyone.
 import { TICK_MS, PLAYER, SPELL, EFFECTS, HITBOX, DEPTH } from './config.js';
 import { rnd, pick } from './util.js';
 import { letterPool, wordsFor } from './words.js';
 import { Dungeon } from './Dungeon.js';
 import { Town } from './Town.js';
-import { Player, Enemy, Slime, Mage, Boss, Chest, PlayerSpell, FloorItem } from './entities.js';
+import { Player, Chest, PlayerSpell, FloorItem } from './entities.js';
+import { spawnEnemies, spawnBoss, enemyFromSave } from './spawner.js';
 import { xpFor, goldFor, chestGold } from './progression.js';
 import { ItemCommands } from './ItemCommands.js';
 import { Shop } from './Shop.js';
@@ -58,7 +59,7 @@ export class Room {
       version: 3, room: this.code, savedAt: Date.now(), floor: this.floor, maxDepth: this.maxDepth,
       foundMythics: [...this.foundMythics], bestiary: this.bestiary, zooFed: this.zooFed,
       levels: { ...this.levels, [this.floor]: this.levelSave() },
-      enemies: this.enemies.map(e => e.toSave()), // the fight on the current floor carries on where it was
+      enemies: this.enemies.map(e => e.toSave()).filter(Boolean), // the fight on the current floor carries on where it was
       shop: this.shop.toSave(),
       players,
     };
@@ -87,7 +88,7 @@ export class Room {
     this.shop.restore(s.shop);
     this.savedPlayers = s.players || {};
     this.loadLevel(this.levels[this.floor]);
-    this.enemies = (s.enemies || []).map(e => Enemy.fromSave(e));
+    this.enemies = (s.enemies || []).map(e => enemyFromSave(e)).filter(Boolean);
     this.stairsOpen = this.cleared;
     this.say(this.floor ? `Welcome back to floor ${this.floor}` : 'Welcome back to the surface', 3);
   }
@@ -126,10 +127,10 @@ export class Room {
     this.floor = depth;
     this.maxDepth = Math.max(this.maxDepth, depth);
     this.loadLevel(this.levels[depth]);
-    if (!this.town) { // new enemies every visit; the Bellwraith only until the floor has been cleared
+    if (!this.town) { // new enemies every visit; the boss only until the floor has been cleared
       const words = wordsFor(this.pool);
-      this.spawnEnemies(words);
-      if (!this.cleared) this.spawnBoss(words);
+      spawnEnemies(this, words);
+      if (!this.cleared) spawnBoss(this, words);
     }
     this.stairsOpen = this.cleared;
     const dg = this.dungeon;
@@ -159,42 +160,6 @@ export class Room {
     this.say(`${pl.name} reads a scroll: the party will be carried ${where}...`, 3);
     for (const p of this.players.values()) p.tell(`The air starts to hum. In ${EFFECTS.travelSeconds} seconds the party is carried ${where}.`);
     this.emit({ t: 'travel', x: pl.x, y: pl.y });
-  }
-
-  spawnEnemies(words) {
-    const count = Math.min(3 + this.floor * 2, DEPTH.maxEnemies);
-    const all = this.dungeon.rooms;
-    const rooms = all.length > 2 ? all.slice(1, -1) : all.slice(1); // never in the start room; the last room is the boss's
-    for (let n = 0; n < count; n++) {
-      const r = rooms[n % rooms.length];
-      const x = rnd(r.x + 1, r.x + r.w - 1), y = rnd(r.y + 1, r.y + r.h - 1);
-      const isMage = Math.random() < Math.min(0.25 + this.floor * 0.12, 0.75);
-      let word = pick(this.pool);
-      if (isMage) { // mages may carry a whole word
-        const wordChance = this.floor === 1 ? 0.35 : Math.min(0.5 + this.floor * 0.1, 0.9);
-        const ok = words.filter(w => w.length <= 2 + Math.floor(this.floor / 2));
-        if (ok.length && Math.random() < wordChance) word = pick(ok);
-      }
-      this.enemies.push(isMage ? new Mage(x, y, word) : new Slime(x, y, word));
-    }
-  }
-
-  /** The Bellwraith guards the stairs room. Its name has 2 words on floor 1, up to 4 deeper down. */
-  spawnBoss(words) {
-    const dg = this.dungeon, r = dg.rooms[dg.rooms.length - 1];
-    const phases = Math.min(1 + Math.ceil(this.floor / 2), 4);
-    const maxLen = Math.min(3 + this.floor, 6);
-    let choices = words.filter(w => w.length >= 3 && w.length <= maxLen);
-    if (choices.length < phases) choices = words.filter(w => w.length >= 2);
-    const names = [];
-    while (names.length < phases) {
-      const left = choices.filter(w => !names.includes(w));
-      names.push(left.length ? pick(left) : pick(this.pool) + pick(this.pool) + pick(this.pool));
-    }
-    names.sort((a, b) => a.length - b.length); // short name first, longest last
-    let x = r.cx, y = r.cy - 1.5;
-    if (dg.blocked(x, y, 0.45)) { x = r.cx; y = r.cy; }
-    this.enemies.push(new Boss(x, y, names));
   }
 
   /** One chest near the start so new players find one early, the rest in random rooms. */
@@ -330,11 +295,11 @@ export class Room {
     this.emit({ t: 'chest', x: chest.x, y: chest.y, by: pl.id });
     this.say(`${pl.name} opened a chest!`, 2);
   }
-  /** The Bellwraith drops three items. */
+  /** A boss drops three items. */
   bossDefeated(boss, pl) {
     for (let k = 0; k < 3; k++) this.dropItem(this.rollLoot(pl), boss.x + (k - 1) * 0.7, boss.y + 0.4);
     this.emit({ t: 'bossdown', x: boss.x, y: boss.y });
-    this.say(`${pl.name} silenced the Bellwraith!`, 3);
+    this.say(boss.type === 'boss' ? `${pl.name} silenced the Bellwraith!` : `${pl.name} defeated ${boss.name}!`, 3);
   }
   /** One random item for this floor; the finder's Luck helps. */
   rollLoot(pl) {
@@ -407,6 +372,7 @@ export class Room {
         if (a.owner.has('cut') && b.letters !== a.letters[0]) {
           b.removed = true; a.owner.blocks++;
           this.emit({ t: 'block', x: b.x, y: b.y, l: b.letters, cut: true });
+          b.source?.onBlocked(this, a.owner, now);
           continue;
         }
         if (b.letters !== a.letters[0]) continue;
@@ -415,12 +381,13 @@ export class Room {
         if (!a.letters) a.removed = true;
         a.owner.blocks++;
         this.emit({ t: 'block', x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, l: b.letters });
+        if (b.source && !b.source.removed) b.source.onBlocked(this, a.owner, now); // the Silent King shows a letter
         break;
       }
     }
     // Player spell vs enemy, then vs chest: same spelling rules for both.
     for (const s of playerSpells()) {
-      const e = this.enemies.find(e => !e.removed && s.distanceTo(e) <= e.hitRadius);
+      const e = this.enemies.find(e => !e.removed && !e.intangible && s.distanceTo(e) <= e.hitRadius); // spells fly through a faded Phantom
       if (!e) continue;
       s.removed = true;
       const word = e.lock.word;
@@ -449,7 +416,7 @@ export class Room {
       const pl = alive.find(p => !p.dead && s.distanceTo(p) <= HITBOX.caster);
       if (!pl) continue;
       s.removed = true;
-      pl.takeHit(this, now, s);
+      if (pl.takeHit(this, now, s) && s.source && !s.source.removed) s.source.onLetterHit(this, pl, now); // leeches, frost
     }
   }
 
@@ -492,20 +459,34 @@ export class Room {
     }
     if (result !== 'done') return;
     e.removed = true; pl.kills++;
-    if (!this.bestiary[e.type]) this.zooNew.push({ slime: 'a Slime', mage: 'a Skeleton Mage', boss: 'the Bellwraith' }[e.type] || e.type);
-    this.bestiary[e.type] = (this.bestiary[e.type] | 0) + 1;
-    this.emit({ t: 'kill', x: e.x, y: e.y, type: e.type });
+    this.countKill(e);
     this.giveGold(pl, goldFor(e.type, this.floor));
     if (e.isBoss) this.bossDefeated(e, pl);
+    e.onDefeated(this, pl, now);
     if (pl.has('draupnir') && ++pl.draupnir % 9 === 0) {
       this.dropItem(Items.makeItem('pot_heal'), e.x, e.y);
       pl.tell('Draupnir drips a Potion of Healing.');
     }
   }
 
+  /** Into the bestiary (the zoo moves in the kinds it has pens for) and a burst on screen. */
+  countKill(e) {
+    const pen = { slime: 'a Slime', mage: 'a Skeleton Mage', boss: 'the Bellwraith' }[e.type];
+    if (!this.bestiary[e.type] && pen) this.zooNew.push(pen);
+    this.bestiary[e.type] = (this.bestiary[e.type] | 0) + 1;
+    this.emit({ t: 'kill', x: e.x, y: e.y, type: e.type });
+  }
+  /** Something else finished along with an enemy (a downed gremlin when its twin falls): gone, with gold and XP for its word. */
+  defeatAlso(e, pl) {
+    e.removed = true; pl.kills++;
+    this.countKill(e);
+    pl.gainXp(this, xpFor(e.lock.word, e.type));
+    this.giveGold(pl, goldFor(e.type, this.floor));
+  }
+
   /** An item effect removes the next letter of an enemy's word (Laevateinn, Zeus, blades). */
   chip(e, pl, why) {
-    if (!e || e.removed || !pl || (e.isBoss && e.shield)) return;
+    if (!e || e.removed || !pl || e.guarded || e.intangible) return;
     const word = e.lock.word;
     this.emit({ t: 'chip', x: e.x, y: e.y, l: e.lock.next, why });
     const result = e.hitBy(this, { letters: e.lock.next, owner: pl });
@@ -529,7 +510,7 @@ export class Room {
     for (const p of all) {
       const on = p.dead ? null : this.dungeon.stairsAt(p.x, p.y), was = p.onStairs;
       if (on === 'down' && !this.stairsOpen) { // sealed: say so once, and go down as soon as they open
-        if (was !== 'sealed') p.tell('The stairs down are sealed until every enemy on this floor, the Bellwraith too, is gone.');
+        if (was !== 'sealed') p.tell('The stairs down are sealed until every enemy on this floor, its boss too, is gone.');
         p.onStairs = 'sealed';
         continue;
       }

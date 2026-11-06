@@ -3,6 +3,7 @@
 //   Entity ── Character ── Player
 //      │            └───── Enemy ── Slime
 //      │                       ├─── Mage
+//      │                       ├─── Creature (every other kind, the new bosses too; art in art/monsters.js)
 //      │                       └─── Boss (the Bellwraith)
 //      ├── Chest
 //      ├── Critter (zoo animals, practice dummies and the wishing fountain on the surface)
@@ -12,6 +13,7 @@ import { TS, prettyMorse } from './constants.js';
 import { drawWord } from './art/font.js';
 import { wizardSprite, enemySprite, chestSprite, itemSprite, wraithSprite, bellSprite } from './art/sprites.js';
 import { critterSprite } from './art/critters.js';
+import { MONSTERS, monsterSprite } from './art/monsters.js';
 import { MORSE } from './morse.js';
 
 export const ORB_LIFT = 8;      // px a spell's orb floats above its spot on the floor; hitboxes are drawn at this height
@@ -93,14 +95,21 @@ export class Character extends Entity {
   get walkFrame() { return this.moving ? [1, 0, 2, 0][Math.floor(this.walkTime * 8) % 4] : 0; }
 }
 
-/** Word above an enemy or chest: removed letters show as "_", the next one is highlighted. */
+/**
+ * Word above an enemy or chest: removed letters show as "_", the next one is highlighted.
+ * Some rare enemies change how it is shown: d.show (the word as you may see it, e.g. with ? for hidden
+ * letters), d.rev (written back to front) or d.morse (only dots and dashes).
+ */
 function drawLabel(r, view, d, x, y, colors) {
-  const word = '_'.repeat(d.p) + d.word.slice(d.p);
   const shake = d.wrong ? Math.round(Math.sin(view.now / 15) * 2) : 0;
   const wordY = y - (view.insight ? 8 : 0);
   // Circlet of Insight: the Morse code for the next letter, just under the word
-  if (view.insight) r.smallText(prettyMorse(MORSE[d.word[d.p]]), x, wordY + 17, '#fff59d');
-  drawWord(r.ctx, word, x + shake, wordY, i => i < d.p ? colors.done : i === d.p ? (d.wrong ? '#ef5350' : colors.next) : colors.rest);
+  if (view.insight && d.word[d.p]) r.smallText(prettyMorse(MORSE[d.word[d.p]]), x, wordY + 17, '#fff59d');
+  if (d.morse) { r.morseWord(d.word, d.p, x + shake, wordY + 3, false); return; }
+  const shown = d.show || d.word, n = d.word.length;
+  const at = (i) => (d.rev ? n - 1 - i : i); // which letter of the word sits at place i
+  const text = Array.from({ length: n }, (_, i) => (at(i) < d.p ? '_' : shown[at(i)])).join('');
+  drawWord(r.ctx, text, x + shake, wordY, i => at(i) < d.p ? colors.done : at(i) === d.p ? (d.wrong ? '#ef5350' : colors.next) : colors.rest);
 }
 
 // ------------------------------------------------------------------ player
@@ -115,6 +124,10 @@ export class Player extends Character {
     const frame = this.walkFrame;
     const img = wizardSprite(d.color, d.hurt && Math.floor(view.now / 60) % 2 === 0, frame);
     r.drawFacing(img, sx, sy - img.height + 2 - (this.moving && frame === 0 ? 1 : 0), img.width, img.height, this.face);
+    if (d.frozen) { // a Frost Wisp's letter: frozen in place for a moment
+      ctx.globalAlpha = 0.45; ctx.fillStyle = '#b3e5fc'; r.orb(sx, sy - img.height / 2, img.width / 2 + 2, img.height / 2 + 1); ctx.fill();
+      ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff'; ctx.fillRect(sx - 4, sy - img.height + 3, 1, 1); ctx.fillRect(sx + 3, sy - 6, 1, 1);
+    }
     ctx.globalAlpha = 1;
     const morse = view.morse;
     if (this.id === view.myId && (morse.spell || morse.buf)) {
@@ -135,7 +148,12 @@ export class Player extends Character {
 // ------------------------------------------------------------------ enemies
 
 export class Enemy extends Character {
-  static create(data) { return data.type === 'slime' ? new Slime(data) : data.type === 'boss' ? new Boss(data) : new Mage(data); }
+  static create(data) {
+    if (data.type === 'slime') return new Slime(data);
+    if (data.type === 'boss') return new Boss(data);
+    if (MONSTERS[data.type]) return new Creature(data);
+    return new Mage(data);
+  }
   get labelColors() { return { done: '#5d8a5f', next: '#ffd54f', rest: '#ffffff' }; }
   /** Subclasses return { img, w, h, bob } for this frame. */
   pose(view) { throw new Error('not implemented'); }
@@ -180,6 +198,92 @@ export class Mage extends Enemy {
   pose(view) {
     const frame = this.walkFrame, img = enemySprite('mage', this.data.flash, frame);
     return { img, w: img.width, h: img.height, bob: this.moving ? (frame === 0 ? 1 : 0) : Math.round(Math.sin(view.now / 400 + this.id)) };
+  }
+}
+
+/**
+ * Every enemy kind drawn from art/monsters.js, rare ones and new bosses included. Besides the sprite it
+ * shows what the server says about the enemy's trick: a timer or key over its word (d.tag), a faded or
+ * downed body, an aura (Warhorn Goblin), a guard ring (Gravekeeper), sand (Hourglass Golem) and the
+ * Hydra's heads, each with a word of its own.
+ */
+export class Creature extends Enemy {
+  get art() { return MONSTERS[this.data.type]; }
+  get light() { return this.art.light ? { radius: 46, strength: 0.6 } : null; }
+  /** Which of the Hydra's heads are still up, as a bitmask (the sprite leaves the others out). */
+  get variant() { return this.data.heads ? this.data.heads.reduce((m, h, i) => m | (h.up ? 1 << i : 0), 0) : 0; }
+  pose(view) {
+    const style = this.art.pose, frame = style === 'walk' ? this.walkFrame : 0;
+    const img = monsterSprite(this.data.type, this.data.flash, frame, this.variant);
+    let w = img.width, h = img.height, bob = 0;
+    if (style === 'hop') {
+      const t = this.moving ? this.walkTime * 9 : view.now / 300 + this.id, sq = this.moving ? Math.sin(t) : Math.sin(t) * 0.35;
+      w = Math.round(w * (1 + sq * 0.12)); h = Math.round(h * (1 - sq * 0.12));
+      bob = this.moving ? Math.round(Math.max(0, -Math.sin(t)) * 3) : 0;
+    } else if (style === 'float') bob = 3 + Math.round(Math.sin(view.now / 260 + this.id) * 2);
+    else if (style === 'skitter') bob = this.moving ? Math.round(Math.abs(Math.sin(this.walkTime * 22))) : 0;
+    else if (style === 'walk') bob = this.moving ? (frame === 0 ? 1 : 0) : Math.round(Math.sin(view.now / 500 + this.id) * 0.6);
+    return { img, w, h, bob };
+  }
+
+  draw(r, view) {
+    const d = this.data, ctx = r.ctx, { x: sx, y: sy } = r.toScreen(this.x, this.y);
+    if (d.disguise) return this.drawAsChest(r, view, sx, sy);
+    const { img, w, h, bob } = this.pose(view);
+    if (d.aura) { // the Warhorn Goblin's reach: everyone inside throws twice as fast
+      ctx.strokeStyle = d.aura; ctx.lineWidth = 1; ctx.globalAlpha = 0.18 + 0.08 * Math.sin(view.now / 200);
+      r.orb(sx, sy, 5 * 16, 5 * 16 * 0.75); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    r.shadow(sx, sy, Math.min(11, Math.max(4, Math.round(w / 2.6))));
+    ctx.globalAlpha = d.faded ? 0.2 : d.downed ? 0.4 : (this.art.alpha || 1);
+    r.drawFacing(img, sx, sy - h + 2 - bob, w, h, this.face);
+    ctx.globalAlpha = 1;
+    const top = sy - h - bob;
+    if (d.ward) { // the Gravekeeper's guard: spells bounce off while its raised dead stand
+      ctx.strokeStyle = d.ward; ctx.globalAlpha = 0.35 + 0.15 * Math.sin(view.now / 160); ctx.lineWidth = 1;
+      r.orb(sx, sy - h / 2, w / 2 + 5, h / 2 + 4); ctx.stroke();
+      ctx.globalAlpha = 0.1; ctx.fillStyle = d.ward; ctx.fill(); ctx.globalAlpha = 1;
+    }
+    if (d.downed) { r.smallText('z z', sx + 6, top - 2 + Math.round(Math.sin(view.now / 300) * 2), '#c6ff00'); }
+    let ly = top - 10 + (d.wrong ? Math.round(Math.sin(view.now / 20)) : 0);
+    if (d.heads) ly = this.drawHeads(r, view, sx, top, img.width);
+    else if (!d.downed) {
+      if (d.faded) ctx.globalAlpha = 0.45;
+      drawLabel(r, view, d, sx, ly, d.boss || d.phase !== undefined ? { done: '#7c9a7e', next: '#ffd54f', rest: '#ffffff' } : this.labelColors);
+      ctx.globalAlpha = 1;
+    }
+    if (d.tag) r.smallText(d.tag, sx, ly - (d.morse ? 0 : 2) - (view.insight ? 8 : 0), d.tagColor || '#ffffff');
+    if (d.sand !== undefined) this.drawSand(r, sx, ly - 6, d.sand, d.sandMax || 1);
+    this.drawStatus(r, view, sx, top);
+  }
+  /** Until it bites, a Mimic is drawn exactly like a closed chest. */
+  drawAsChest(r, view, sx, sy) {
+    const d = this.data, img = chestSprite(false, d.flash);
+    r.shadow(sx, sy + 1, 7);
+    r.ctx.drawImage(img, sx - (img.width >> 1), sy - img.height + 3);
+    if (Math.random() < 0.04) view.particles.sparkle(this.x + (Math.random() - 0.5) * 14 / TS, this.y, '#ffd54f');
+    drawLabel(r, view, d, sx, sy - img.height - 8, { done: '#8a7a3f', next: '#ffffff', rest: '#ffd54f' });
+  }
+  /** The Hydra: each head that is up carries its own word; when all are cut, the body's name shows. Returns the label's y. */
+  drawHeads(r, view, sx, top, imgW) {
+    const d = this.data, art = this.art;
+    if (!d.heads.some(h => h.up)) { const ly = top - 2; drawLabel(r, view, d, sx, ly, { done: '#7c9a7e', next: '#ffd54f', rest: '#ffffff' }); return ly; }
+    let highest = top;
+    d.heads.forEach((h, i) => {
+      if (!h.up) return;
+      const hx = sx - imgW / 2 + (art.heads[i].x0 + art.heads[i].x1 + 1) / 2, ly = top - 10 - [0, 18, 9][i]; // one row per head so words never overlap
+      const ctx = r.ctx; ctx.fillStyle = '#2e7d32'; ctx.fillRect(Math.round(hx), ly + 9, 1, top - ly - 8); // a thin stalk down to its head
+      drawLabel(r, view, { word: h.w, p: h.p, wrong: h.wrong }, hx, ly, { done: '#7c9a7e', next: '#ffd54f', rest: '#c5e1a5' });
+      highest = Math.min(highest, ly);
+    });
+    return highest;
+  }
+  /** The Hourglass Golem's sand: a bar that drains. */
+  drawSand(r, sx, y, left, max) {
+    const ctx = r.ctx, w = 30, f = Math.max(0, Math.min(1, left / max));
+    ctx.fillStyle = '#0b0910'; ctx.fillRect(sx - w / 2 - 1, y - 1, w + 2, 4);
+    ctx.fillStyle = '#4e3b1f'; ctx.fillRect(sx - w / 2, y, w, 2);
+    ctx.fillStyle = f > 0.3 ? '#ffe082' : '#ff7043'; ctx.fillRect(sx - w / 2, y, Math.round(w * f), 2);
   }
 }
 

@@ -1,5 +1,5 @@
 // Everything the client knows about the current floor: the tile map and the entities on it.
-import { Player, Enemy, Boss, Chest, Spell, FloorItem, Critter } from './entities.js';
+import { Player, Enemy, Chest, Spell, FloorItem, Critter } from './entities.js';
 
 // Tile codes from the server (see server/Dungeon.js): 0 wall, 1 floor, 2 grass, 3 path, 4 tree, 5 house, 6 shop,
 // 7 house door, 8 shop door, 9 duel arena, 10 (sent as 'a') arena gate, 11 ('b') fence, 12 ('c') the fountain's
@@ -62,6 +62,7 @@ export class World {
     for (const e of this.entities.values()) e.update(dt, renderT, nowT);
   }
   get players() { return [...this.entities.values()].filter(e => e instanceof Player); }
-  get boss() { for (const e of this.entities.values()) if (e instanceof Boss) return e; return null; }
+  /** The floor's boss (whichever one it is), or null. */
+  get boss() { for (const e of this.entities.values()) if (e instanceof Enemy && e.data.boss) return e; return null; }
   player(id) { const e = this.entities.get(id); return e instanceof Player ? e : null; }
 }
