@@ -55,8 +55,9 @@ export class World {
   }
 
   update(dt) {
-    const renderT = this.clock === null ? undefined : performance.now() - this.clock - INTERP_MS;
-    for (const e of this.entities.values()) e.update(dt, renderT);
+    const nowT = this.clock === null ? undefined : performance.now() - this.clock; // the server's present, roughly
+    const renderT = nowT === undefined ? undefined : nowT - INTERP_MS;
+    for (const e of this.entities.values()) e.update(dt, renderT, nowT);
   }
   get players() { return [...this.entities.values()].filter(e => e instanceof Player); }
   get boss() { for (const e of this.entities.values()) if (e instanceof Boss) return e; return null; }

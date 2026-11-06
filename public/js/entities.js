@@ -12,6 +12,9 @@ import { drawWord } from './art/font.js';
 import { wizardSprite, enemySprite, chestSprite, itemSprite, wraithSprite, bellSprite } from './art/sprites.js';
 import { MORSE } from './morse.js';
 
+export const ORB_LIFT = 8;      // px a spell's orb floats above its spot on the floor; hitboxes are drawn at this height
+const SPELL_LEAD_MS = 80;       // never carry a spell further than this past its newest snapshot
+
 // ------------------------------------------------------------------ base classes
 
 export class Entity {
@@ -34,12 +37,15 @@ export class Entity {
    * Called every frame. Draws everyone a little in the past (renderT, in server time) and slides between the
    * two snapshots around that moment, so movement stays smooth even when Wi-Fi delivers snapshots unevenly.
    */
-  update(dt, renderT) {
+  update(dt, renderT, nowT) {
     const p = this.serverPositionAt(renderT);
-    this.hx = p.x; this.hy = p.y;
     // my own caster is drawn where prediction says, ahead of the server; everything else where the server had it
     const at = this.local || p;
     this.x = at.x; this.y = at.y;
+    // hitbox: for my own caster, where the server has me now (behind my predicted wizard only by the real
+    // network delay); for everyone else, exactly where they are drawn
+    const h = this.local ? this.serverPositionAt(nowT) : p;
+    this.hx = h.x; this.hy = h.y;
   }
   /** Where the server had this entity at renderT, sliding between the two snapshots around that moment. */
   serverPositionAt(renderT) {
@@ -71,9 +77,9 @@ export class Character extends Entity {
     this.moving = false;
     this.walkTime = 0;
   }
-  update(dt, renderT) {
+  update(dt, renderT, nowT) {
     const bx = this.x, by = this.y;
-    super.update(dt, renderT);
+    super.update(dt, renderT, nowT);
     if (dt <= 0) return;
     this.vx = this.vx * 0.8 + (this.x - bx) * TS / dt * 0.2;
     this.vy = this.vy * 0.8 + (this.y - by) * TS / dt * 0.2;
@@ -230,8 +236,23 @@ export class Spell extends Entity {
   get depth() { return this.y + 0.05; }
   get color() { return this.data.o === 'e' ? '#ff5252' : (this.data.c || '#4fc3f7'); }
   get light() { return { radius: 34, strength: 0.8 }; }
+  /**
+   * Spells fly fast (8 tiles a second) and straight, so drawing them 100 ms in the past like everything else
+   * would put them most of a tile behind where the server really has them. Instead they are carried forward
+   * from the newest snapshot to the server's present (at most a tick or so), which is where they hit.
+   */
+  update(dt, renderT, nowT) {
+    const s = this.samples, last = s[s.length - 1];
+    if (!last || nowT === undefined || nowT <= last.t || s.length < 2) return super.update(dt, renderT, nowT);
+    const prev = s[s.length - 2], span = last.t - prev.t;
+    const ahead = Math.min(nowT - last.t, SPELL_LEAD_MS);
+    const jump = Math.hypot(last.x - prev.x, last.y - prev.y) > 3; // a teleport: do not fly on from it
+    const f = span > 0 && !jump ? ahead / span : 0;
+    this.x = this.hx = last.x + (last.x - prev.x) * f;
+    this.y = this.hy = last.y + (last.y - prev.y) * f;
+  }
   draw(r, view) {
-    const ctx = r.ctx, { x: sx, y: base } = r.toScreen(this.x, this.y), sy = base - 8;
+    const ctx = r.ctx, { x: sx, y: base } = r.toScreen(this.x, this.y), sy = base - ORB_LIFT;
     const letters = this.data.l, half = (letters.length - 1) * 3, pulse = Math.sin(view.now / 80) * 1.5;
     ctx.fillStyle = this.color;
     ctx.globalAlpha = 0.35; r.orb(sx, sy, half + 7 + pulse, 7 + pulse); ctx.fill();

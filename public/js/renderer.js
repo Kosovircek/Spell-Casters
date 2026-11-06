@@ -4,7 +4,7 @@ import { makeCanvas, hash } from './art/canvas.js';
 import { TILES } from './art/tiles.js';
 import { arenaPlatform, arenaSky, drawTwinkles } from './art/arena.js';
 import { MORSE } from './morse.js';
-import { Player, Spell } from './entities.js';
+import { Player, Spell, ORB_LIFT } from './entities.js';
 
 export class Renderer {
   constructor(canvas) {
@@ -80,14 +80,16 @@ export class Renderer {
   }
 
   /**
-   * What the server really checks, drawn on the floor where the server had each thing at this moment
-   * (the same moment the spells are drawn at, so your own ring can trail your wizard a little while you walk).
+   * What the server really checks. Hits are measured between spots on the floor, but every ring is lifted by
+   * the same ORB_LIFT pixels so it sits on the body of the caster and around the orb of the spell (lifting all
+   * of them equally keeps every distance the same). Spells and your own ring are drawn where the server has
+   * them now; your ring trails your wizard only by the real delay before the server hears your keys.
    * A spell hits a caster when its dot enters the caster's ring; two spells meet when their dashed rings touch.
    */
   drawHitboxes(world) {
     const { ctx } = this, hit = world.map.hit;
     if (!hit) return; // an older server that does not send its sizes
-    const circle = (x, y, r) => { ctx.beginPath(); ctx.arc(x * TS + this.ox, y * TS + this.oy, r * TS, 0, Math.PI * 2); };
+    const circle = (x, y, r) => { ctx.beginPath(); ctx.arc(x * TS + this.ox, y * TS + this.oy - ORB_LIFT, r * TS, 0, Math.PI * 2); };
     ctx.save();
     ctx.lineWidth = 1;
     for (const e of world.entities.values()) {
@@ -97,11 +99,10 @@ export class Renderer {
         ctx.globalAlpha = 0.18; ctx.fillStyle = e.data.color; ctx.fill();
         ctx.globalAlpha = 0.95; ctx.strokeStyle = e.data.color; ctx.stroke();
       } else if (e instanceof Spell) {
-        const { x: sx, y: sy } = this.toScreen(e.hx, e.hy);
+        const { x: sx, y } = this.toScreen(e.hx, e.hy), sy = y - ORB_LIFT;
         ctx.globalAlpha = 0.7; ctx.strokeStyle = e.color; ctx.setLineDash([2, 2]);
         circle(e.hx, e.hy, hit.block / 2); ctx.stroke();
         ctx.setLineDash([]);
-        ctx.globalAlpha = 0.5; ctx.fillStyle = '#ffffff'; ctx.fillRect(sx, sy - 8, 1, 8); // from the orb down to its spot
         ctx.globalAlpha = 1; ctx.fillStyle = '#0b0910'; ctx.fillRect(sx - 2, sy - 2, 4, 4);
         ctx.fillStyle = '#ffffff'; ctx.fillRect(sx - 1, sy - 1, 2, 2);
       }
