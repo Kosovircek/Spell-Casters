@@ -59,13 +59,13 @@ A new game starts on **the surface**, a small village above the dungeon with you
 
 - **Floors are persistent**, like in Angband. Every floor keeps its layout, its chests (opened or not) and every item lying on the ground when you leave it, also after the game is saved and loaded.
 - **Only the enemies come back.** Every time the party arrives on a floor it gets new enemies, as tough as that floor's depth (more of them, more letters, harder hits).
-- **Stairs up and down.** Each floor has pale stairs up in the corner of the room you arrive in, and the stairs down in the Bellwraith's room. Stairs up always work. The stairs down open once every enemy, the Bellwraith too, is gone; after that they stay open on every later visit and that floor's Bellwraith does not come back. You use stairs by stepping onto them, so arriving next to stairs never sends you straight back.
+- **Stairs up and down.** Each floor has pale stairs up in the corner of the room you arrive in, and the stairs down in the boss's room. Stairs up always work. The stairs down open once every enemy, the boss too, is gone; after that they stay open on every later visit and that floor's boss does not come back. You use stairs by stepping onto them, so arriving next to stairs never sends you straight back.
 - The whole party is always on the same floor: when one caster takes the stairs (or a travel scroll goes off), everyone goes.
 - The floor line (top right) shows your floor, and on the surface the deepest floor the party has reached.
 
 ### Gold, the shop and your house
 
-- **Gold**: every caster starts with 100. Whoever finishes an enemy gets a little gold (more deeper down, x1.5 for mages, x10 for the Bellwraith), and whoever opens a chest gets some too. It shows in the party panel and on the character sheet.
+- **Gold**: every caster starts with 100. Whoever finishes an enemy gets a little gold (more deeper down and for tougher kinds: x1.5 for mages, x10 to x16 for bosses; see *Enemies*), and whoever opens a chest gets some too. It shows in the party panel and on the character sheet.
 - **The shop** (Dot & Dash Goods, the blue roof): walk up to its door to open it. Tabs: *Potions & scrolls*, *Weapons*, *Armour* (Bronze and Iron gear) and *Sell*. The shop buys anything from your pack for a third of its price. Things it does not stock itself (better gear, mythic items) stay on its shelf, marked "sold by a caster", so they can be bought back.
 - **Your house** (the red roof): every caster has their own, with room for 24 items. Tabs: *Your house* (take things out) and *Your pack* (leave things there). It is kept in the save with the rest of your caster.
 - **The Duel Arena** (the open stone ring with moon banners): walk through its gate to duel a caster from your party, see *Duel room*.
@@ -89,15 +89,90 @@ A travel scroll that would do nothing (Recall on the surface before anyone has b
 
 - You have **HP** instead of hearts: 20 at level 1, +6 per level, plus gear. HP is **not** refilled when you go down the stairs.
 - Natural regeneration is tiny: 1 HP every 10 seconds, and only after nothing has hit you for 10 seconds. Potions of Healing restore 30% of your max HP.
-- **XP** goes only to the caster whose spell finishes a word. A word is worth the sum of its letters (E T A N I M = 1, S O U R D K = 2, G W H L F = 3, the rest = 4) times the enemy type: slime ×1, skeleton mage ×1.5, Bellwraith ×5 (per name), chest ×0.5.
+- **XP** goes only to the caster whose spell finishes a word. A word is worth the sum of its letters (E T A N I M = 1, S O U R D K = 2, G W H L F = 3, the rest = 4) times the enemy type: slime ×1, skeleton mage ×1.5, tougher kinds up to ×3, rare enemies ×2 to ×3, bosses ×5 to ×8 (per name), chest ×0.5 (all in `server/bestiary.js`).
 - Level L to L+1 needs `10 × L^1.5` XP (10, 28, 52, 80 ...). Max level 30. A level up adds the new max HP to your current HP, but does not heal you fully.
-- Each enemy letter that hits you deals damage: slime 4, mage 6, Bellwraith 8 on floor 1, +25% per floor, ±25% random. **Armor** lets `100 / (100 + Armor)` of it through (25 armor blocks 20%, 100 blocks 50%).
+- Each enemy letter that hits you deals damage: slime 4, mage 6, Bellwraith 8 on floor 1 (every kind has its own number in `server/bestiary.js`), +25% per floor, ±25% random. **Armor** lets `100 / (100 + Armor)` of it through (25 armor blocks 20%, 100 blocks 50%).
 - Stats grow on their own: max HP +6 per level, speed +1% per level, Luck +1 every 5 levels. Press **C** for the character sheet.
 - Killing still works only by spelling. Weapons add no damage: each one has a special effect instead.
 
+## Enemies
+
+Every floor gets a crowd of everyday enemies picked to fit its depth, usually one or two **rare enemies** with a trick of their own, and a **boss** in the stairs room. Everything about each kind (floors, speed, how it shoots, damage, XP, gold, word lengths) is one line in `server/bestiary.js`.
+
+### Everyday enemies
+
+They differ in how they move (keep their distance, rush you, flutter, skitter, sit still), how they shoot (one letter, two side by side, a fan of three, a ring) and how long their words are.
+
+| Enemy | Floors | How it fights |
+| --- | --- | --- |
+| Slime | 1-9 | Slow, one letter, rarely shoots |
+| Skeleton Mage | 1+ | Keeps its distance, shoots often, may carry a word |
+| Cave Rat | 1-8 | Darts about, single letters |
+| Dusk Bat | 1-10 | Flutters erratically, fast letters |
+| Skeleton | 1-14 | Steady, short words |
+| Sporecap | 1-12 | A mushroom that never moves; puffs a ring of four slow letters |
+| Zombie | 2-16 | Shambles right up to you, slow letters, 2-4 letter words |
+| Goblin | 2-12 | Circles you, throws two letters at once |
+| Cave Beetle | 2-14 | Slow, armoured: almost always a 3-4 letter word |
+| Skeleton Archer | 3-20 | Stays far back, fast letters |
+| Imp | 3-18 | Flutters, two letters at once |
+| Ghoul | 4-22 | A fast zombie that rushes in |
+| Giant Spider | 4-24 | Skitters, a fan of three slow letters |
+| Will-o'-Wisp | 5-26 | Glows, flutters, fast letters from far away |
+| Bone Hound | 6-28 | Very fast, rushes, fast letters |
+| Cultist | 6-30 | A fan of three, words up to 5 letters |
+| Bone Knight | 8-40 | Slow and armoured, long words (4-6), two letters at once |
+| Gargoyle | 10-45 | Sits still like a statue until someone comes within 4 tiles, then flies at you |
+| Mummy | 12-60 | Slow, rushes, long words, two letters at once |
+| Shade | 14+ | See-through, flutters, fast letters |
+| Cave Troll | 16+ | Big, rushes, a fan of heavy letters |
+| Rune Golem | 20+ | Very slow, 5-7 letter names, a ring of six letters |
+
+### Rare enemies
+
+Each one changes how you fight it or how you spell it. A floor usually has one (from floor 5 sometimes two, from floor 12 sometimes three). The number is the first floor it can show up on.
+
+| Enemy | From | Its trick |
+| --- | --- | --- |
+| Mimic | 1 | Looks exactly like a chest, with a chest's word, until you come within 2 tiles or cast at it. Then it bites: rushes you and throws two letters at a time |
+| Twin Slime | 1 | Spell it and it splits into two slimes: one holds the first half of its name, the other the second half |
+| Morse Moth | 1 | Its name is shown only in Morse dots and dashes |
+| Pickpocket | 1 | Never attacks. It runs at you, snatches some gold and runs away; spell it to get the gold back, doubled |
+| Mirrorling | 2 | Its name is written back to front: read it right to left |
+| Jumble Sprite | 2 | Random letters, and the ones still left shuffle every 3.5 seconds |
+| Mockingbird | 2 | A wrong letter teaches it that letter: it is added to the end of its name |
+| Fuse Beetle | 2 | Once it sees you, its fuse burns (shown over it). Spell it in time, or be more than 2.5 tiles away when it blows up |
+| Phantom | 3 | Fades in and out. While faded, spells fly straight through it and do not aim at it |
+| Lurker | 3 | Its name stays hidden (?) unless a caster is within 4.5 tiles |
+| Keyshell | 3 | A key letter is written over it. A spell only gets through if it starts with that letter (KEY + name in one spell works); the key changes every time |
+| Blink Imp | 3 | Every time a spell takes letters off it, it blinks to another spot nearby |
+| Mossback | 4 | Leave it alone for 4 seconds and the letters you removed grow back, one by one |
+| Gremlin | 4 | Comes in pairs with the same name. Finish one and it only falls over: spell the twin within 6 seconds or it gets back up with its whole name |
+| Bloodleech | 4 | Every letter of its that hurts you gives it one letter of its name back. Block or dodge! |
+| Brood Mother | 5 | Lays a spiderling every 7 seconds (up to four at a time) until you spell her |
+| Hollow Scribe | 5 | Every other letter of its name is hidden: work out the word |
+| Mirror Knight | 6 | A wrong letter bounces off its mirror shield and flies straight back at you |
+| Warhorn Goblin | 6 | Stays at the back; every enemy within 5 tiles of it (the orange ring) throws twice as fast. Take it out first |
+| Frost Wisp | 7 | Its letters freeze you in place for a moment |
+
+### Bosses
+
+A boss guards the stairs room of every floor. Each boss first appears on its own floor; after that, any boss the party could have met by then may guard a floor, with the newer ones a little more likely. Every boss has a name of several words (2 on floor 1, up to 4 deeper down, shown as pips on the boss bar), and the boss bar at the bottom says what to do right now. Every boss drops three items.
+
+| Boss | First floor | How to beat it |
+| --- | --- | --- |
+| The Bellwraith | 1 | See below: a bell shield, and a name written only in Morse |
+| The Gravekeeper | 3 | Raises a ring of skeletons and cannot be touched while any of them stands. Once they are gone it is exposed for a few seconds; then it raises more. Every name finished raises a bigger batch |
+| The Lettered Hydra | 6 | Three heads, each with a short word of its own; every head that is up spits letters. Its body's name can only be spelled once all three heads are cut, and cut heads grow back (with a new word) after about 10 seconds. Finish a body name and all heads grow back with longer words |
+| The Hourglass Golem | 9 | Long names (5 letters and more) and a draining bar of sand. Finish the name before the sand runs out, or every letter of it comes back and the Golem slams the floor with a ring of letters |
+| The Echo Queen | 12 | Walks among echoes that look exactly like her, with the same name. Only the real queen throws letters, so watch who attacks. Hitting an echo shatters it into a ring of letters (new echoes come later); hitting the queen makes her and her echoes swap places |
+| The Silent King | 15 | Its name is hidden: only the first letter shows. Every one of its letters you **block** in mid-air reveals one more. It throws lots of letters, so there is plenty to block. Guessing works too |
+
+For testing, `FORCE_ENEMY=phantom,mimic npm start` puts those kinds on every floor (on top of the usual crowd) and `FORCE_BOSS=hydra npm start` makes that boss guard every floor.
+
 ## The Bellwraith (boss)
 
-Every floor has a boss, the Bellwraith, guarding the stairs room. The stairs only open once it is gone.
+The first boss, guarding the stairs room of floors 1 and 2 (and some deeper floors later).
 
 - **Its name is written only in Morse.** Above it you see dots and dashes, not letters. Read them (the H cheat sheet helps) and cast the letters. Letters you already spelled turn back into letters.
 - **Bell shield.** While its shield is up, every spell bounces off. The wraith rings one letter on its bell in Morse, again and again: the bell and its eyes flash, and you hear a low bell tone at your own Morse speed. Cast that letter at it to shatter the shield.
@@ -203,7 +278,7 @@ and grows more urgent as you get into trouble: your HP dropping below three quar
 to you, and most of all both at once. As danger rises the pad brightens, the tempo lifts, an arpeggio, a bass pulse
 and then drums fade in, and the chords turn darker. Low HP adds a heartbeat. It swells quickly and settles slowly.
 The surface town has a warm, quiet variant that never gets intense; duels start tense with a beat already going;
-a living Bellwraith adds a little extra edge. When you die it muffles until you respawn. The music dips while your
+a living boss adds a little extra edge. When you die it muffles until you respawn. The music dips while your
 own Morse tone sounds so every dot and dash stays clear. M mutes it; Settings has a volume slider.
 
 ## Saving lobbies
@@ -236,7 +311,11 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `Town.js` | `Town`: the surface village (a fixed `Dungeon` subclass with the house, the shop, the duel arena, their doors, the zoo's pens, the practice yard, the fountain, lamp posts and the stairs down) |
 | `Critters.js` | Friendly surface things you cast at: `Critter` → `ZooAnimal`, `Dummy` (practice streaks), `Fountain` (heals, wishes for a ward); `townCritters` fills the zoo from `Room.bestiary` |
 | `Shop.js` | `Shop`: the shop's stock, buying, selling and its shelf of resold items, and every caster's house storage |
-| `entities.js` | **OOP game objects**: `Entity` → `Actor` → `Player`, `Enemy` (→ `Slime`, `Mage`, `Boss`); `Chest`; `Spell` (→ `PlayerSpell`, `EnemySpell`); `FloorItem`; and `WordLock` (the spell-the-word rule shared by enemies and chests) |
+| `bestiary.js` | **Every enemy kind in one table**: floors, speed, shots, damage, XP, gold, word lengths |
+| `monsters.js` | The 20 rare enemies and their tricks (`Mimic`, `Phantom`, `Gremlin`...) |
+| `bosses.js` | The five newer bosses: `Gravekeeper`, `Hydra`, `HourglassGolem`, `EchoQueen` (+ `EchoImage`), `SilentKing` |
+| `spawner.js` | Fills a floor with enemies, picks its boss, turns saved enemies back into objects (`FORCE_ENEMY`, `FORCE_BOSS` for testing) |
+| `entities.js` | **OOP game objects**: `Entity` → `Actor` → `Player`, `Enemy` (→ `Slime`, `Mage`, `Creature`, `Boss` → `Bellwraith`); `Chest`; `Spell` (→ `PlayerSpell`, `EnemySpell`); `FloorItem`; and `WordLock` (the spell-the-word rule shared by enemies and chests) |
 | `Dungeon.js` | Tile codes, map generation with stairs down and up, plus collision, line of sight and path finding |
 | `ItemCommands.js` | Angband item commands: quaff, read, wield, take off, drop, destroy, pick up |
 | `SaveStore.js` | Reads and writes lobby saves in `saves/`; entities, `Dungeon` and `Room` each have `toSave()` / `fromSave()` |
@@ -252,7 +331,7 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | --- | --- |
 | `main.js` | Entry point: `new Game().start()` |
 | `game.js` | **`Game` class**: creates every part, handles server messages, runs the main loop (`update` then `render`) |
-| `entities.js` | **OOP drawable objects** mirroring the server: `Entity` → `Character` → `Player`, `Enemy` (→ `Slime`, `Mage`, `Boss`); `Chest`; `Spell`; `FloorItem`. Each slides between server snapshots (drawn 100 ms in the past, so uneven Wi-Fi stays smooth) and draws itself |
+| `entities.js` | **OOP drawable objects** mirroring the server: `Entity` → `Character` → `Player`, `Enemy` (→ `Slime`, `Mage`, `Creature` for every other kind and the new bosses, `Boss` for the Bellwraith); `Chest`; `Spell`; `FloorItem`. Each slides between server snapshots (drawn 100 ms in the past, so uneven Wi-Fi stays smooth) and draws itself |
 | `world.js` | `World`: the tile map and all entities, kept in sync with server snapshots |
 | `renderer.js` | `Renderer`: camera, tiles and walls, depth sorting, lighting, drawing helpers; `renderDuel` for the duel arena |
 | `network.js` | `Network`: WebSocket connection, `on(type, fn)` subscriptions, `move` / `cast` / `command`, ping (shown next to the room name) |
@@ -270,4 +349,4 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `settings.js` | `Settings`: saved preferences and the Esc panel |
 | `lobby.js` | `Lobby`: name and room screen |
 | `constants.js` | Screen size, key maps, small helpers |
-| `art/` | Procedural pixel art: `canvas.js` (helpers), `font.js`, `sprites.js`, `tiles.js` (dungeon, stairs up and down, and the village's grass, paths, trees, buildings and duel arena), `arena.js` (the duel platform and starry sky), `critters.js` (zoo animals, the practice dummy, fences and lamp posts) |
+| `art/` | Procedural pixel art: `canvas.js` (helpers), `font.js`, `sprites.js`, `tiles.js` (dungeon, stairs up and down, and the village's grass, paths, trees, buildings and duel arena), `arena.js` (the duel platform and starry sky), `critters.js` (zoo animals, the practice dummy, fences and lamp posts), `monsters.js` (every enemy beyond the slime and mage, and the new bosses) |
