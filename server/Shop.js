@@ -41,7 +41,8 @@ export class Shop {
   run(pl, m) {
     const kind = m.c === 'enter' ? m.kind : ['buy', 'sell'].includes(m.c) ? 'shop' : 'home';
     if (pl.dead || !['home', 'shop'].includes(kind)) return;
-    if (!this.room.dungeon.doorNear || !this.room.dungeon.doorNear(pl.x, pl.y, kind)) return pl.send({ t: 'store', kind: null });
+    const dg = this.room.levelOf(pl)?.dungeon;
+    if (!dg || !dg.doorNear || !dg.doorNear(pl.x, pl.y, kind)) return pl.send({ t: 'store', kind: null });
     if (m.c === 'buy') this.buy(pl, String(m.ref || ''));
     if (m.c === 'sell') this.sell(pl, pl.pack[m.i]);
     if (m.c === 'stash') this.stash(pl, pl.pack[m.i]);
@@ -74,7 +75,7 @@ export class Shop {
     if (row.used) this.shelf = this.shelf.filter(it => it !== item);
     pl.gold -= row.price;
     pl.tell(`You buy ${Items.displayName({ ...item, n: 1 })} for ${row.price} gold.`);
-    this.room.emit({ t: 'gold', x: pl.x, y: pl.y, n: -row.price, id: pl.id });
+    this.room.levelOf(pl).emit({ t: 'gold', x: pl.x, y: pl.y, n: -row.price, id: pl.id });
   }
   sell(pl, item) {
     if (!item) return;
@@ -88,7 +89,7 @@ export class Shop {
       this.shelf.length = Math.min(this.shelf.length, SHELF_SIZE);
     }
     pl.tell(`You sell ${Items.displayName(one)} for ${price} gold.`);
-    this.room.emit({ t: 'gold', x: pl.x, y: pl.y, n: price, id: pl.id });
+    this.room.levelOf(pl).emit({ t: 'gold', x: pl.x, y: pl.y, n: price, id: pl.id });
   }
 
   // ------------------------------------------------------------------ house

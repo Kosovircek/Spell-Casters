@@ -34,7 +34,7 @@ export class GameServer {
    * progress, like any player leaving) and join their party's duel room. Two can duel; a third is told to wait.
    */
   enterArena(ws, room, player) {
-    if (room instanceof DuelRoom || !room.town || player.dead || !room.dungeon.doorNear(player.x, player.y, 'arena')) return null;
+    if (room instanceof DuelRoom || player.floor !== 0 || player.dead || !room.levelOf(player).dungeon.doorNear(player.x, player.y, 'arena')) return null;
     const arena = this.roomFor(room.code, true);
     if (arena.players.size >= arena.maxPlayers) {
       const names = [...arena.players.values()].map(p => p.name).join(' and ');

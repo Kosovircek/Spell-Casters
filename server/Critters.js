@@ -155,14 +155,20 @@ export function townCritters(room, town) {
   const list = [];
   for (const pen of town.pens) {
     if (pen.unlock && !(room.bestiary[pen.unlock] > 0)) continue; // not met in the dungeon yet
-    const a = pen.area, count = pen.kind === 'boss' ? 1 : 2;
-    for (let k = 0; k < count; k++) {
-      const animal = new ZooAnimal(pen.kind, a.x + a.w * (k + 1) / (count + 1), a.y + a.h / 2, 'E', a);
-      animal.lock = new WordLock(animal.nextWord(room));
-      list.push(animal);
-    }
+    list.push(...penAnimals(room, pen));
   }
   for (const d of town.dummies) list.push(new Dummy(d.tier, d.x, d.y, room));
   list.push(new Fountain(town.fountain.x, town.fountain.y));
+  return list;
+}
+
+/** The animals living in one zoo pen. */
+export function penAnimals(room, pen) {
+  const a = pen.area, count = pen.kind === 'boss' ? 1 : 2, list = [];
+  for (let k = 0; k < count; k++) {
+    const animal = new ZooAnimal(pen.kind, a.x + a.w * (k + 1) / (count + 1), a.y + a.h / 2, 'E', a);
+    animal.lock = new WordLock(animal.nextWord(room));
+    list.push(animal);
+  }
   return list;
 }

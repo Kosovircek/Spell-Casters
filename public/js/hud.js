@@ -56,6 +56,8 @@ export class Hud {
       this.barsHtml(p, p.id === myId && !duel, duel) +
       (duel ? `<div class="stats">${p.wins} round${p.wins === 1 ? '' : 's'} won · ${p.blocks} letters blocked</div>`
         : `<div class="stats">${p.kills} defeated · ${p.blocks} blocked${p.id === myId ? ` · <span class="gold">${p.gold} gold</span>` : ''}</div>` + this.effectsHtml(p)) + `</div>`).join('') +
+      (state.elsewhere || []).map(p => `<div class="pl away" style="border-color:${p.color}"><b style="color:${p.color}">${escapeHtml(p.name)}</b>` +
+        ` <span class="lv">Lv ${p.lv}</span><div class="stats">${p.dead ? 'down' : 'exploring'} ${p.floor ? 'floor ' + p.floor : 'the surface'}</div></div>`).join('') +
       (state.slow ? `<div class="pl" style="border-color:#ffd54f"><span class="fx">⌛ Enemy spells slowed ${state.slow}s</span></div>` : ''));
     const me = state.players.find(p => p.id === myId);
     $('dead').hidden = !(me && me.dead) || !!duel; // in a duel the round banner says it

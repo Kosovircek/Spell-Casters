@@ -88,6 +88,8 @@ export class Player extends Actor {
     this.name = (name || 'Caster').slice(0, 12);
     this.color = color;
     this.mx = 0; this.my = 0;           // movement input, -1..1
+    this.floor = 0;                     // which floor this caster is exploring (0 is the surface)
+    this.travel = null;                 // { at, to } a recall or descent scroll about to carry this caster away
     this.level = 1; this.xp = 0;
     this.dead = false; this.respawnAt = 0;
     this.kills = 0; this.blocks = 0;
@@ -277,7 +279,7 @@ export class Player extends Actor {
 
   // ---- saving: what a player keeps when the lobby is saved and resumed
   toSave() {
-    return { name: this.name, x: this.x, y: this.y, hp: this.hp, dead: this.dead, level: this.level, xp: this.xp, kills: this.kills, blocks: this.blocks, ward: this.ward, gold: this.gold, pack: this.pack, home: this.home, equip: this.equip, practiceBest: this.practiceBest };
+    return { name: this.name, floor: this.floor, x: this.x, y: this.y, hp: this.hp, dead: this.dead, level: this.level, xp: this.xp, kills: this.kills, blocks: this.blocks, ward: this.ward, gold: this.gold, pack: this.pack, home: this.home, equip: this.equip, practiceBest: this.practiceBest };
   }
   /** Take back saved progress (matched by name when someone rejoins). Saves from before levelling start at level 1. */
   restore(s) {
