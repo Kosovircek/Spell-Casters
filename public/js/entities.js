@@ -420,7 +420,7 @@ export class Spell extends Entity {
     ctx.globalAlpha = 0.35; r.orb(sx, sy, half + 7 + pulse, 7 + pulse); ctx.fill();
     ctx.globalAlpha = 1; r.orb(sx, sy, half + 5, 5); ctx.fill();
     r.shadow(sx, sy + 8, 3 + half / 2);
-    drawWord(ctx, letters, sx, sy - 4, () => '#fff');
+    r.onTop(() => drawWord(ctx, letters, sx, sy - 4, () => '#fff')); // above the trail particles and the dark
     if (Math.random() < 0.5) view.particles.trail(this.x, this.y, this.color);
   }
 }

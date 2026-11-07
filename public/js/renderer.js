@@ -52,6 +52,7 @@ export class Renderer {
 
     view.particles.draw(ctx, this.ox, this.oy);
     this.drawLighting(world, now);
+    this.drawOnTop();
     if (view.hitboxes) this.drawHitboxes(world);
     this.drawStairsArrow(world);
   }
@@ -77,6 +78,7 @@ export class Renderer {
     const ents = [...world.entities.values()].sort((a, b) => a.depth - b.depth);
     for (const e of ents) e.draw(this, view);
     view.particles.draw(ctx, this.ox, this.oy);
+    this.drawOnTop();
     if (view.hitboxes) this.drawHitboxes(world);
   }
 
@@ -198,6 +200,14 @@ export class Renderer {
       if (world.walkable(i, j + 1)) ctx.fillRect(sx, ty + TS - 1, TS, 1);
     }
     ctx.globalAlpha = 1;
+  }
+
+  /** Queues something (a spell's letters) to be drawn above particles and darkness, so it always stays readable. */
+  onTop(fn) { (this.topQueue ||= []).push(fn); }
+  drawOnTop() {
+    const q = this.topQueue; if (!q) return;
+    this.topQueue = [];
+    for (const fn of q) fn();
   }
 
   /** Darkness everywhere except around light sources (players, spells, chests, open stairs). */
