@@ -35,9 +35,9 @@ export class ItemCommands {
   read(pl, item) {
     const room = this.room;
     if (!item || Items.info(item).type !== 'scroll') return pl.tell('You cannot read that.');
-    if (Items.info(item).travel) { // Recall and the descent scrolls carry the whole party, after a few seconds
+    if (Items.info(item).travel) { // Recall and the descent scrolls carry the reader (only), after a few seconds
       const to = Items.info(item).depth ?? (room.floor > 0 ? 0 : room.maxDepth);
-      const why = room.travelProblem(to);
+      const why = room.travelProblem(pl, to);
       if (why) return pl.tell(why); // nothing happens, and the scroll is kept
       this.takeOne(pl, item);
       room.startTravel(pl, to);

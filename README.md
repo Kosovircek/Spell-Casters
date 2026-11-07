@@ -51,16 +51,16 @@ The menus are the same Angband-style ones as on the keyboard: every row is a but
 - Enemies throw red letter spells. A spell whose first letter matches cancels it in mid-air and keeps flying with its remaining letters. You can also dodge.
 - Aiming is forgiving: a spell picks the best matching target within about 70 degrees of the direction you chose and flies a path to it, curving around walls and corners (up to about 26 tiles of path).
 - Clear the floor, including its boss, then step on the glowing stairs down. Floor 1 uses only the easiest letters (E T A N I M); each floor adds more letters and longer words.
-- When you go down you come back next to a teammate after 10 seconds, at half HP. If the whole party is down, everyone wakes up at half HP by the stairs up of the same floor, and the floor's enemies come back.
+- When you go down you come back next to a teammate after 10 seconds, at half HP. If everyone on your floor is down, they all wake up at half HP by the stairs up of that floor, and its enemies come back.
 
 ## The surface and persistent floors
 
 A new game starts on **the surface**, a small village above the dungeon with your house, a shop, the duel arena, the zoo, the practice yard, the wishing fountain and the stairs down to floor 1.
 
 - **Floors are persistent**, like in Angband. Every floor keeps its layout, its chests (opened or not) and every item lying on the ground when you leave it, also after the game is saved and loaded.
-- **Only the enemies come back.** Every time the party arrives on a floor it gets new enemies, as tough as that floor's depth (more of them, more letters, harder hits).
+- **Only the enemies come back.** Whenever a caster arrives on a floor nobody else is on, it gets new enemies, as tough as that floor's depth (more of them, more letters, harder hits).
 - **Stairs up and down.** Each floor has pale stairs up in the corner of the room you arrive in, and the stairs down in the boss's room. Stairs up always work. The stairs down open once every enemy, the boss too, is gone; after that they stay open on every later visit and that floor's boss does not come back. You use stairs by stepping onto them, so arriving next to stairs never sends you straight back.
-- The whole party is always on the same floor: when one caster takes the stairs (or a travel scroll goes off), everyone goes.
+- **Every caster explores on their own.** Stairs and travel scrolls only move the caster who takes them; your teammates stay where they are. Casters on the same floor see each other and fight its enemies together, and teammates on other floors are listed (dimmed) in the party panel with the floor they are on. A new caster starts next to a teammate; a returning caster comes back on the floor they left from.
 - The floor line (top right) shows your floor, and on the surface the deepest floor the party has reached.
 
 ### Gold, the shop and your house
@@ -79,8 +79,8 @@ A new game starts on **the surface**, a small village above the dungeon with you
 | --- | --- | --- |
 | Potion of Healing / Speed / Warding | 25 / 40 / 40 | As below |
 | Scroll of Teleportation / Slow Time / Resurrection | 40 / 50 / 200 | As below |
-| Scroll of Recall | 125 | After 5 seconds the party is pulled up to the surface. Read on the surface, it takes the party down to the deepest floor reached |
-| Scroll of Descent to Floor 10 / 20 / 30 / 40 / 50 | 400 / 1000 / 2000 / 3500 / 5000 | After 5 seconds the party goes straight to that floor |
+| Scroll of Recall | 125 | After 5 seconds you are pulled up to the surface. Read on the surface, it takes you down to the deepest floor the party has reached |
+| Scroll of Descent to Floor 10 / 20 / 30 / 40 / 50 | 400 / 1000 / 2000 / 3500 / 5000 | After 5 seconds you go straight to that floor |
 | Bronze / Iron weapons and armour | 40 / 120 (mail 60 / 180) | Plain common gear; a shop shield blocks one random common letter |
 
 A travel scroll that would do nothing (Recall on the surface before anyone has been down, or a descent to the floor you are on) is not used up. Chests can also hold a Scroll of Recall now and then.
@@ -183,7 +183,7 @@ The first boss, guarding the stairs room of floors 1 and 2 (and some deeper floo
 
 ## Duel room (2 players)
 
-The **Duel Arena** stands on the surface, to the right of the village square. Walk through its gate and you are in your party's duel room; when a second caster from the same room walks in, the duel starts. The arena holds two casters: a third is told it is busy and stays outside. **Esc → Back to the surface** puts you in front of the gate again (if the party went down meanwhile, you join them on their floor).
+The **Duel Arena** stands on the surface, to the right of the village square. Walk through its gate and you are in your party's duel room; when a second caster from the same room walks in, the duel starts. The arena holds two casters: a third is told it is busy and stays outside. **Esc → Back to the surface** puts you in front of the gate again.
 
 Your co-op caster is saved as you walk in and comes back exactly as it was: levels and gear do not count in the arena, and nothing that happens there changes them.
 
@@ -218,7 +218,7 @@ Every floor has 2 to 4 chests with a gold word above them; one is always in the 
 Numpad Morse and aiming keep working while a menu is open. The game does not pause.
 
 **Potions** (quaff): Healing (30% of max HP), Speed (+50% run speed for 30s), Warding (absorbs the next 2 hits).
-**Scrolls** (read): Slow Time (enemy spells at 40% speed for 15s), Teleportation (random room), Resurrection (revives downed teammates at half HP, heals the party 20%), Recall and Descent (see *The surface and persistent floors*).
+**Scrolls** (read): Slow Time (enemy spells at 40% speed for 15s), Teleportation (random room), Resurrection (revives downed teammates on your floor at half HP, heals them 20%), Recall and Descent (see *The surface and persistent floors*).
 
 Every piece of gear needs a minimum level. You can carry gear above your level; it shows "(needs Lv N)" in red until you get there. There are eight slots: weapon, shield, ring, amulet, head, body, cloak, feet.
 
@@ -307,7 +307,8 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `StaticServer.js` | Serves the `public/` folder |
 | `GameServer.js` | **Networking**: WebSocket connections, rooms, routing messages (`join`, `move`, `cast`, `cmd`) |
 | `DuelRoom.js` | **The duel room** (each co-op room has one; `GameServer.enterArena` / `leaveArena` move a caster in and out on the same connection): `Arena` (the platform, a `Dungeon` subclass), `DuelPlayer`, `DuelSpell`, rounds and spell-vs-spell blocking |
-| `Room.js` | **One co-op game**: keeps every visited floor (`levels`), moves the party between floors (`enterFloor`: stairs, recall and descent scrolls, wipes), runs `tick()` (update entities, collisions, stairs, wipe), casting and targeting, broadcasts state |
+| `Room.js` | **One co-op game**: the party's casters, saves and shared progress (deepest floor, bestiary, mythics), keeps every visited floor (`levels`), runs one `Level` per floor someone is on (`live`) and moves single casters between floors (`movePlayer`: stairs, recall and descent scrolls) |
+| `Level.js` | **One floor being played**: its map, enemies, spells, chests, items and the casters on it; runs `tick()` (update entities, collisions, stairs, wipe), casting and targeting, broadcasts state to the casters on that floor |
 | `Town.js` | `Town`: the surface village (a fixed `Dungeon` subclass with the house, the shop, the duel arena, their doors, the zoo's pens, the practice yard, the fountain, lamp posts and the stairs down) |
 | `Critters.js` | Friendly surface things you cast at: `Critter` → `ZooAnimal`, `Dummy` (practice streaks), `Fountain` (heals, wishes for a ward); `townCritters` fills the zoo from `Room.bestiary` |
 | `Shop.js` | `Shop`: the shop's stock, buying, selling and its shelf of resold items, and every caster's house storage |

@@ -29,6 +29,7 @@ html, body { margin: 0; height: 100%; background: #0b0910; color: #e8e2f4; font-
 #party { position: absolute; left: 12px; top: 12px; font-size: 14px; }
 .pl { margin-bottom: 6px; padding: 4px 8px; background: #0b0910b0; border-left: 4px solid; }
 .pl .lv { color: #ffd54f; font-size: 12px; }
+.pl.away { opacity: 0.7; padding: 2px 8px; }
 .pl .down { color: #ef5350; font-size: 13px; }
 .bar { position: relative; width: 150px; height: 13px; background: #2a2236; border: 1px solid #4b3d63; margin-top: 3px; }
 .bar i { position: absolute; left: 0; top: 0; bottom: 0; }

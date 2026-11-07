@@ -27,7 +27,8 @@ export class SaveStore {
       if (!f.endsWith('.json')) continue;
       try {
         const d = JSON.parse(fs.readFileSync(path.join(this.dir, f), 'utf8'));
-        out.push({ room: d.room, floor: d.floor, players: Object.values(d.players || {}).map(p => p.name), savedAt: d.savedAt });
+        const players = Object.values(d.players || {});
+        out.push({ room: d.room, deepest: d.maxDepth | 0, players: players.map(p => Number.isFinite(p.floor ?? d.floor) && (p.floor ?? d.floor) > 0 ? `${p.name} (floor ${p.floor ?? d.floor})` : p.name), savedAt: d.savedAt });
       } catch {}
     }
     return out.sort((a, b) => b.savedAt - a.savedAt);
