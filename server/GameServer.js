@@ -43,7 +43,7 @@ export class GameServer {
     }
     room.removePlayer(player);
     room.say(`${player.name} went into the duel arena`, 2);
-    return { room: arena, player: arena.addPlayer(ws, player.name) };
+    return { room: arena, player: arena.addPlayer(ws, player.name, [...player.magic.known]) }; // the grimoire comes along
   }
   /** Esc menu in a duel: back to the co-op game, in front of the arena gate (if the party is still on the surface). */
   leaveArena(ws, room, player) {

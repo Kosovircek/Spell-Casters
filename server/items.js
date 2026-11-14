@@ -6,6 +6,7 @@
 //   Mythic     a named item from Greek, Norse, Chinese or Japanese myth with a special effect
 // Every piece of gear needs a minimum level to wield.
 import { pick } from './util.js';
+import { SPELLS, SCHOOLS } from './magic/spellbook.js';
 
 export const SLOTS = ['weapon', 'shield', 'ring', 'neck', 'head', 'body', 'cloak', 'feet'];
 export const PACK_SIZE = 12; // inventory letters a) to l)
@@ -116,6 +117,25 @@ export const CONSUMABLES = {
   circlet:   { type: 'gear', slot: 'head', level: 1, cost: 60, name: 'Circlet of Insight', stats: { armor: 1 }, fx: ['insight'], desc: 'Shows the Morse code for the next letter above every enemy and chest. Great for learning.' },
 };
 
+// ------------------------------------------------------------------ spellbooks
+// One per effect spell (see magic/spellbook.js). Reading one opens a puzzle; solving it teaches the spell.
+// Its title never gives the spell's word away: the puzzle does. Kind 'bk_' + spell id.
+export const BOOKS = Object.fromEntries(SPELLS.map(sp => ['bk_' + sp.id, {
+  type: 'book', spell: sp.id, school: sp.school, level: sp.level, cost: 40 + sp.level * 30, name: `Spellbook of ${sp.book}`,
+  desc: `A ${SCHOOLS[sp.school].name.toLowerCase()} spellbook. Read it (r) and solve the puzzle on its pages to learn the effect spell inside. ${sp.desc} Casting it needs level ${sp.level} and ${sp.mana} mana.`,
+}]));
+/**
+ * A spellbook for something found around this level: a spell of at most maxLevel, preferring ones nobody in the
+ * party has found yet (found = Set of spell ids, updated here).
+ */
+export function bookFor(maxLevel, found = new Set()) {
+  const fits = SPELLS.filter(sp => sp.level <= Math.max(1, maxLevel));
+  const fresh = fits.filter(sp => !found.has(sp.id));
+  const sp = pick(fresh.length ? fresh : fits);
+  found.add(sp.id);
+  return makeItem('bk_' + sp.id);
+}
+
 // ------------------------------------------------------------------ prices
 // What the shop asks for an item. It pays a third of that when you sell it.
 const MATERIAL_COST = [40, 120, 300, 700, 1500];
@@ -147,7 +167,7 @@ export function info(it) {
     return b && { type: 'gear', slot: b.slot, level: MATERIALS[it.mat]?.level ?? 1, base: b };
   }
   if (MYTHIC[it.kind]) return { type: 'gear', ...MYTHIC[it.kind], mythic: true };
-  return CONSUMABLES[it.kind] || null;
+  return CONSUMABLES[it.kind] || BOOKS[it.kind] || null;
 }
 export const isGear = (it) => info(it)?.type === 'gear';
 
@@ -177,7 +197,7 @@ export function baseName(it) {
 // Angband-style naming: "a Potion of Healing", "3 Potions of Healing", "an Iron Helm", "the Aegis of Athena"
 export function displayName(it) {
   const n = baseName(it);
-  if (it.n > 1) return `${it.n} ${n.replace(/^(Potion|Scroll)/, '$1s')}`;
+  if (it.n > 1) return `${it.n} ${n.replace(/^(Potion|Scroll|Spellbook)/, '$1s')}`;
   if (MYTHIC[it.kind]) return n; // mythic names carry their own article
   if (it.kind === 'c_boots') return 'a pair of ' + n;
   return (/^[AEIOU]/.test(n) ? 'an ' : 'a ') + n;
@@ -212,12 +232,13 @@ export function toClient(it) {
     id: it.id, kind: it.kind, type: d.type, slot: d.slot || null, name: displayName(it), desc: describe(it), n: it.n,
     letter: it.letter || null, letters: blockedLetters(it) || null, lvl: d.level || 0,
     rarity: d.mythic ? 'mythic' : it.ench ? 'enchanted' : d.type === 'gear' ? 'common' : null,
-    color: itemColor(it), sell: sellPrice(it),
+    color: itemColor(it), sell: sellPrice(it), ...(d.type === 'book' ? { spell: d.spell, school: d.school } : {}),
   };
 }
 export function itemColor(it) {
   const d = info(it);
   if (d?.mythic) return d.cursed ? '#b71c1c' : '#ffd54f';
+  if (d?.type === 'book') return SCHOOLS[d.school].color;
   if (it.kind.startsWith('c_')) return MATERIALS[it.mat].color;
   return null;
 }
@@ -243,6 +264,7 @@ export function restoreItem(saved) {
  */
 export function rollItem(floor, pool, luck = 0, found = new Set()) {
   if (process.env.FORCE_ITEM) { const forced = forceItem(process.env.FORCE_ITEM, pool); if (forced) return forced; } // for testing
+  if (Math.random() < 0.06) return bookFor(2 * floor + 3);
   if (Math.random() < 0.5) return makeItem(rollConsumable());
   const target = 2 * floor + Math.floor(Math.random() * 4);
   // Mythic: rare, more likely with Luck, never above the target level by more than a few
@@ -282,7 +304,7 @@ export function mythicItem(kind, pool) {
 function forceItem(spec, pool) {
   const [kind, mat] = spec.split(':');
   if (MYTHIC[kind]) return mythicItem(kind, pool);
-  if (CONSUMABLES[kind]) return makeItem(kind);
+  if (CONSUMABLES[kind] || BOOKS[kind]) return makeItem(kind);
   if (kind.startsWith('c_') && BASES[kind.slice(2)]) {
     const m = Math.min(4, mat | 0), b = BASES[kind.slice(2)];
     return makeItem(kind, { mat: m, ...(b.letters ? { letters: rollLetters(pool, b.letters[m]) } : {}) });
@@ -299,7 +321,7 @@ export function addToPack(pack, it, size = PACK_SIZE) {
   if (pack.length >= size) return false;
   pack.push(it);
   // Angband keeps the pack sorted: potions, scrolls, then gear
-  const order = { potion: 0, scroll: 1, gear: 2 };
+  const order = { potion: 0, scroll: 1, book: 2, gear: 3 };
   pack.sort((a, b) => order[info(a).type] - order[info(b).type] || baseName(a).localeCompare(baseName(b)));
   return true;
 }

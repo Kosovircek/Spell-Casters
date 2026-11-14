@@ -19,6 +19,9 @@ import { Dungeon } from './Dungeon.js';
 import { Player, PlayerSpell } from './entities.js';
 import { LETTER_VALUE } from './progression.js';
 import { letterPool } from './words.js';
+import { Magic } from './magic/Magic.js';
+import { RUNE } from './magic/spellbook.js';
+import { isDumbledore } from './magic/dumbledore.js';
 
 const ALL_LETTERS = letterPool(99); // every letter, easiest first
 
@@ -52,6 +55,7 @@ export class DuelPlayer extends Player {
     super(ws, name, PLAYER.colors[side]);
     this.side = side;
     this.wins = 0;
+    this.duelMana = true; // the same mana pool for both, whatever their level
   }
   refreshStats() {
     super.refreshStats();
@@ -65,6 +69,9 @@ export class DuelPlayer extends Player {
     this.x = p.x; this.y = p.y;
     this.dead = false; this.respawnAt = Infinity;
     this.hp = this.maxHp; this.hurt = 0;
+    this.status = {}; this.knock = null;            // every round starts clean: no statuses...
+    this.magic.cooldowns = {}; this.magic.clone = 0; // ...no cooldowns, full mana
+    this.magic.fill();
   }
   snapshot(now) { return { ...super.snapshot(now), side: this.side, wins: this.wins }; }
 }
@@ -134,6 +141,8 @@ export class DuelRoom {
     this.maxPlayers = 2;
     this.players = new Map(); // id -> DuelPlayer
     this.dungeon = new Arena();
+    this.isDuel = true;
+    this.magic = new Magic(this); // effect spells: zones, summons, walls and portals on the platform
     this.spells = [];
     this.events = [];
     this.banner = null;
@@ -155,9 +164,12 @@ export class DuelRoom {
   command(pl) { pl.tell('No items in a duel: just you, your wand and the alphabet.'); }
 
   // ------------------------------------------------------------------ players
-  addPlayer(ws, name) {
+  /** known = the effect spells this caster has learned in the dungeon (they bring their grimoire, not their gear). */
+  addPlayer(ws, name, known = []) {
     const taken = new Set([...this.players.values()].map(p => p.side));
     const pl = new DuelPlayer(ws, name, taken.has(0) ? 1 : 0);
+    for (const id of known) pl.magic.learn(id);
+    if (isDumbledore(name)) pl.magic.learnAll();
     pl.resetFor(this.dungeon);
     this.players.set(pl.id, pl);
     pl.send({ t: 'welcome', id: pl.id, room: this.code, duel: true });
@@ -184,6 +196,7 @@ export class DuelRoom {
   startRound(text) {
     this.round++;
     this.spells = [];
+    this.magic.reset();
     for (const p of this.players.values()) p.resetFor(this.dungeon);
     this.phase = 'countdown';
     this.phaseUntil = Date.now() + DUEL.countdown * 1000;
@@ -205,6 +218,7 @@ export class DuelRoom {
     winner.wins++;
     this.lastWinner = winner.id;
     this.spells = [];
+    this.magic.reset();
     this.emit({ t: 'down', x: loser.x, y: loser.y, id: loser.id });
     if (winner.wins >= DUEL.winsNeeded) {
       this.phase = 'over';
@@ -221,13 +235,34 @@ export class DuelRoom {
   // ------------------------------------------------------------------ casting
   /** Casting works while you wait for an opponent (practice) and during a fight, not between rounds. */
   cast(pl, word, dx, dy) {
-    if (pl.dead || (this.phase !== 'fight' && this.phase !== 'waiting')) return;
-    if (typeof word !== 'string' || !new RegExp(`^[A-Z]{1,${pl.maxLetters}}$`).test(word)) return;
+    if (pl.dead || (this.phase !== 'fight' && this.phase !== 'waiting') || typeof word !== 'string') return;
+    if (word[0] === RUNE) { if (/^\*[A-Z]{0,12}$/.test(word)) this.magic.cast(pl, word.slice(1), dx, dy); return; } // an effect spell
+    if (!new RegExp(`^[A-Z]{1,${pl.maxLetters}}$`).test(word)) return;
     const len = Math.hypot(dx, dy); if (!len || !isFinite(len)) return;
     dx /= len; dy /= len;
+    if (!this.magic.letterCast(pl)) return;
     pl.casts++;
+    if (this.magic.useClone(pl)) { // GEMINI: a twin a little to the side
+      const a = 0.3, tx = dx * Math.cos(a) - dy * Math.sin(a), ty = dx * Math.sin(a) + dy * Math.cos(a);
+      this.spells.push(new DuelSpell(pl, word, tx, ty, this.chooseTarget(pl, word[0], tx, ty)));
+    }
     this.spells.push(new DuelSpell(pl, word, dx, dy, this.chooseTarget(pl, word[0], dx, dy)));
     this.emit({ t: 'cast', x: pl.x, y: pl.y, c: pl.color });
+  }
+  /** A letter spell from a summon (the skull turret): a duel spell starting where the summon is. */
+  makeSpell(owner, letters, dx, dy, target, from) {
+    const s = new DuelSpell(owner, letters, dx, dy, target);
+    if (from) { s.x = from.x + dx * 0.4; s.y = from.y + dy * 0.4; }
+    return s;
+  }
+  /** Hurt a caster (a spell or an effect). Ends the round when they drop. */
+  damage(foe, dmg, by, now) {
+    if (!foe || foe.dead || this.phase !== 'fight') return;
+    foe.hp = Math.max(0, foe.hp - dmg);
+    foe.hurt = 0.4;
+    foe.lastHitAt = now;
+    this.emit({ t: 'hurt', x: foe.x, y: foe.y, id: foe.id, n: dmg });
+    if (foe.hp <= 0) this.endRound(by && by !== foe ? by : this.opponentOf(foe), foe, now);
   }
 
   /**
@@ -245,12 +280,14 @@ export class DuelRoom {
       if (score < bestScore) { bestScore = score; best = { kind, id: o.id }; }
     };
     for (const s of this.spells) if (!s.removed && s.owner !== pl && s.letters[0] === letter) consider('proj', s, 0.7);
+    for (const m of this.magic.extraTargets(pl, letter)) consider('minion', m, m.kind === 'decoy' ? 0.8 : 0.9); // summons with a name, decoys
     const foe = this.opponentOf(pl);
-    if (foe && !foe.dead) consider('player', foe, 1);
+    if (foe && !foe.dead && !foe.concealed) consider('player', foe, 1); // UMBRA and NEBULA: nothing to home on
     return best;
   }
   findTarget({ kind, id }) {
     if (kind === 'proj') return this.spells.find(s => s.id === id);
+    if (kind === 'minion') return this.magic.findMinion(id);
     const p = this.players.get(id);
     return p && !p.dead ? p : null;
   }
@@ -263,6 +300,7 @@ export class DuelRoom {
     if (this.phase !== 'countdown') for (const pl of this.players.values()) pl.update(this, now, alive);
     for (const s of this.spells) s.update(this, now);
     this.resolveCollisions(now);
+    this.magic.tick(now);
     this.spells = this.spells.filter(s => !s.removed);
     this.broadcastState(now);
   }
@@ -293,15 +331,12 @@ export class DuelRoom {
     // Spell vs caster: any letter touching the caster lands the whole spell, once (then it is gone).
     for (const s of live()) {
       if (this.phase !== 'fight') break;
+      if (s.rune) continue; // effect orbs come down through Magic
       const foe = this.opponentOf(s.owner);
       if (!foe || foe.dead || !s.touches(foe)) continue;
+      if (this.magic.reflect(foe, s)) continue; // AEGIS
       s.removed = true;
-      const dmg = s.damage;
-      foe.hp = Math.max(0, foe.hp - dmg);
-      foe.hurt = 0.4;
-      foe.lastHitAt = now;
-      this.emit({ t: 'hurt', x: foe.x, y: foe.y, id: foe.id, n: dmg });
-      if (foe.hp <= 0) this.endRound(s.owner, foe, now);
+      this.damage(foe, Math.round(s.damage * (foe.is('corrode') ? 1.5 : 1)), s.owner, now);
     }
   }
 
@@ -316,8 +351,10 @@ export class DuelRoom {
       players: [...this.players.values()].map(p => ({ ...p.snapshot(now), still: this.phase === 'countdown' })), // nobody walks during the countdown
       enemies: [], chests: [], items: [],
       projs: this.spells.map(s => s.snapshot()),
+      minions: this.magic.minionSnapshot(now),
+      magic: this.magic.snapshot(now),
     });
-    for (const pl of this.players.values()) pl.sendState(base, this.events);
+    for (const pl of this.players.values()) { if (pl.magic.dirty) pl.sendGrimoire(); pl.sendState(base, this.events); }
     this.events = [];
   }
 }

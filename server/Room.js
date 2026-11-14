@@ -11,6 +11,7 @@ import { TICK_MS, PLAYER } from './config.js';
 import { Player } from './entities.js';
 import { Level } from './Level.js';
 import { Shop } from './Shop.js';
+import { isDumbledore, makeDumbledore } from './magic/dumbledore.js';
 
 const SHOP_COMMANDS = ['enter', 'buy', 'sell', 'stash', 'take'];
 const PEN_NAMES = { slime: 'a Slime', mage: 'a Skeleton Mage', boss: 'the Bellwraith' };
@@ -29,6 +30,7 @@ export class Room {
     this.levels = {};         // floor number -> saved layout, chests, items and cleared flag of floors nobody is on
     this.maxDepth = 0;        // deepest floor anyone has reached (a Scroll of Recall read on the surface goes there)
     this.foundMythics = new Set(); // mythic items drop at most once per game (like Angband artifacts)
+    this.foundBooks = new Set();   // spells whose books have dropped: new drops prefer the others
     this.bestiary = {};       // enemy type -> how many the party has defeated; each kind met moves into the zoo
     this.zooNew = [];         // zoo pens that opened while nobody was on the surface
     this.zooFed = 0;          // treats the zoo animals have had
@@ -48,7 +50,7 @@ export class Room {
     for (const [floor, lv] of this.live) levels[floor] = lv.levelSave(true); // fights on busy floors carry on where they were
     return {
       version: 4, room: this.code, savedAt: Date.now(), maxDepth: this.maxDepth,
-      foundMythics: [...this.foundMythics], bestiary: this.bestiary, zooFed: this.zooFed, zooNew: this.zooNew,
+      foundMythics: [...this.foundMythics], foundBooks: [...this.foundBooks], bestiary: this.bestiary, zooFed: this.zooFed, zooNew: this.zooNew,
       levels, shop: this.shop.toSave(), players,
     };
   }
@@ -60,6 +62,7 @@ export class Room {
   restore(s) {
     this.maxDepth = Math.max(0, s.maxDepth | 0, s.floor | 0);
     this.foundMythics = new Set(s.foundMythics || []);
+    this.foundBooks = new Set(s.foundBooks || []);
     this.bestiary = s.bestiary && typeof s.bestiary === 'object' ? s.bestiary : {};
     this.zooFed = s.zooFed | 0;
     this.zooNew = Array.isArray(s.zooNew) ? s.zooNew : [];
@@ -151,6 +154,7 @@ export class Room {
       if (!Number.isFinite(saved.x) || lv.dungeon.blocked(pl.x, pl.y, pl.radius)) { pl.placeAt(lv); pl.restore({ ...saved, x: pl.x, y: pl.y }); }
       delete this.savedPlayers[pl.name.toLowerCase()];
     }
+    if (isDumbledore(pl.name)) makeDumbledore(pl); // the debug character
     if (opts.fromArena) { pl.x = lv.dungeon.arenaExit.x; pl.y = lv.dungeon.arenaExit.y; }
     pl.onStairs = lv.dungeon.stairsAt(pl.x, pl.y);
     this.players.set(pl.id, pl);

@@ -18,6 +18,9 @@ import { xpFor, goldFor, chestGold } from './progression.js';
 import { ItemCommands } from './ItemCommands.js';
 import { townCritters, penAnimals } from './Critters.js';
 import * as Items from './items.js';
+import { Magic } from './magic/Magic.js';
+import { RUNE } from './magic/spellbook.js';
+import { bookFor } from './magic/books.js';
 
 export class Level {
   /**
@@ -41,7 +44,8 @@ export class Level {
     this.slowUntil = 0;
     if (this.town) this.dungeon.bestiary = party.bestiary; // the zoo's signs count what the party has defeated
     this.critters = this.town ? townCritters(this, this.dungeon) : [];
-    if (!this.town && !saved) this.spawnChests(wordsFor(this.pool));
+    this.magic = new Magic(this);  // effect spells: their zones, summons, walls and portals on this floor
+    if (!this.town && !saved) { this.spawnChests(wordsFor(this.pool)); this.hideBook(); }
     if (saved?.enemies) this.enemies = saved.enemies.map(e => enemyFromSave(e)).filter(Boolean);
     else this.spawnFoes();
     this.stairsOpen = this.cleared;
@@ -139,13 +143,37 @@ export class Level {
     this.emit({ t: 'travel', x: pl.x, y: pl.y });
   }
 
+  /** Now and then a new floor hides a spellbook in a corner of one of its rooms. LUX shows it; so does walking close. */
+  hideBook() {
+    if (Math.random() > 0.45) return;
+    const dg = this.dungeon, r = pick(dg.rooms.slice(1).length ? dg.rooms.slice(1) : dg.rooms);
+    const corners = [[r.x, r.y], [r.x + r.w - 1, r.y], [r.x, r.y + r.h - 1], [r.x + r.w - 1, r.y + r.h - 1]];
+    const [i, j] = pick(corners);
+    if (dg.stairsAt(i + 0.5, j + 0.5)) return;
+    const f = new FloorItem(bookFor(this.floor + 2, this.party.foundBooks), i + 0.5, j + 0.5);
+    f.hidden = true;
+    this.items.push(f);
+  }
+  /** A spellbook dropped by a boss or a rare enemy, as deep as this floor. */
+  dropBook(x, y, extra = 0) { this.dropItem(bookFor(this.floor * 2 + extra, this.party.foundBooks), x, y); }
+
   // ------------------------------------------------------------------ casting
+  /** A letter spell, of the room's kind (the duel arena makes its own). */
+  makeSpell(owner, letters, dx, dy, target, from) { return new PlayerSpell(owner, letters, dx, dy, target, from); }
+
   cast(pl, word, dx, dy) {
-    if (pl.dead || typeof word !== 'string' || !new RegExp(`^[A-Z]{1,${pl.maxLetters}}$`).test(word)) return;
+    if (pl.dead || typeof word !== 'string') return;
+    if (word[0] === RUNE) { if (/^\*[A-Z]{0,12}$/.test(word)) this.magic.cast(pl, word.slice(1), dx, dy); return; } // an effect spell
+    if (!new RegExp(`^[A-Z]{1,${pl.maxLetters}}$`).test(word)) return;
     const len = Math.hypot(dx, dy); if (!len || !isFinite(len)) return;
     dx /= len; dy /= len;
+    if (!this.magic.letterCast(pl)) return;
     pl.casts++;
     const taken = new Set();
+    if (this.magic.useClone(pl)) { // GEMINI: a twin a little to the side
+      const a = 0.3;
+      this.launch(pl, word, dx * Math.cos(a) - dy * Math.sin(a), dx * Math.sin(a) + dy * Math.cos(a), taken);
+    }
     if (pl.has('fork') && pl.casts % 3 === 0) { // Trident of Poseidon: three spells, 35 degrees apart
       for (const a of [0, -0.61, 0.61]) this.launch(pl, word, dx * Math.cos(a) - dy * Math.sin(a), dx * Math.sin(a) + dy * Math.cos(a), taken);
     } else this.launch(pl, word, dx, dy, taken);
@@ -215,6 +243,7 @@ export class Level {
   /** A boss drops three items. */
   bossDefeated(boss, pl) {
     for (let k = 0; k < 3; k++) this.dropItem(this.rollLoot(pl), boss.x + (k - 1) * 0.7, boss.y + 0.4);
+    this.dropBook(boss.x, boss.y + 1.1, 4); // every boss guards a spellbook
     this.emit({ t: 'bossdown', x: boss.x, y: boss.y });
     this.say(boss.type === 'boss' ? `${pl.name} silenced the Bellwraith!` : `${pl.name} defeated ${boss.name}!`, 3);
   }
@@ -249,6 +278,7 @@ export class Level {
     this.fireCloaks(alive);
     for (const s of this.spells) s.update(this, now);
     this.resolveCollisions(alive, now);
+    this.magic.tick(now);
     for (const c of this.chests) c.update(this, now);
     for (const c of this.critters) c.update(this, now);
 
@@ -277,7 +307,7 @@ export class Level {
 
   resolveCollisions(alive, now) {
     const live = (s) => !s.removed;
-    const playerSpells = () => this.spells.filter(s => s.fromPlayer && live(s));
+    const playerSpells = () => this.spells.filter(s => s.fromPlayer && !s.rune && live(s)); // rune orbs: see Magic
     const enemySpells = () => this.spells.filter(s => !s.fromPlayer && live(s));
 
     // Player spell vs enemy letter: the spell's first letter cancels a matching letter, the rest keeps flying.
@@ -331,6 +361,7 @@ export class Level {
       if (!s.slowed && alive.some(p => p.trail.some(t => Math.hypot(t.x - s.x, t.y - s.y) < 0.7))) s.slowed = true; // Sleipnir
       const pl = alive.find(p => !p.dead && s.distanceTo(p) <= HITBOX.caster);
       if (!pl) continue;
+      if (this.magic.reflect(pl, s)) continue; // AEGIS
       s.removed = true;
       if (pl.takeHit(this, now, s) && s.source && !s.source.removed) s.source.onLetterHit(this, pl, now); // leeches, frost
     }
@@ -349,6 +380,7 @@ export class Level {
       if (pl.stats.stagger && result === 'hit') e.stun(now, pl.stats.stagger * 1000, this, 'stagger');
       if (result === 'hit' && pl.has('burn') && !e.burnAt) { e.burnAt = now + 2000; e.burnBy = pl; }
       if (result === 'hit' && pl.stats.echo && Math.random() < pl.stats.echo) this.chip(e, pl, 'echo');
+      if (result === 'hit' && e.is('corrode') && !e.removed) this.chip(e, pl, 'acid'); // ROBIGO: one extra letter
     }
     if (result === 'hit' || e.removed) return;
     // A whole word was spelled: XP for whoever finished it, and word effects.
@@ -378,6 +410,7 @@ export class Level {
     this.countKill(e);
     this.giveGold(pl, goldFor(e.type, this.floor));
     if (e.isBoss) this.bossDefeated(e, pl);
+    else if (e.def.kind === 'special' && Math.random() < 0.3) this.dropBook(e.x, e.y + 0.5, 2); // rare enemies sometimes carry one
     e.onDefeated(this, pl, now);
     if (pl.has('draupnir') && ++pl.draupnir % 9 === 0) {
       this.dropItem(Items.makeItem('pot_heal'), e.x, e.y);
@@ -442,6 +475,7 @@ export class Level {
     this.wipeAt = 0;
     this.spells = [];
     this.slowUntil = 0;
+    this.magic.reset();
     this.spawnFoes();
     const at = this.arrival('wipe');
     for (const pl of this.players.values()) { pl.travel = null; pl.placeAt(this, at); }
@@ -463,8 +497,11 @@ export class Level {
       items: this.items.map(f => f.snapshot()),
       critters: this.critters.map(c => c.snapshot()),
       projs: this.spells.map(s => s.snapshot()),
+      minions: this.magic.minionSnapshot(now),
+      magic: this.magic.snapshot(now),
     });
     for (const pl of here) {
+      if (pl.magic.dirty) pl.sendGrimoire();
       const travel = pl.travel ? { to: pl.travel.to, secs: Math.max(0, Math.ceil((pl.travel.at - now) / 1000)) } : null;
       pl.sendState(travel ? base.slice(0, -1) + ',"travel":' + JSON.stringify(travel) + '}' : base, this.events);
     }
