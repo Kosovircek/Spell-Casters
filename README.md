@@ -181,6 +181,62 @@ The first boss, guarding the stairs room of floors 1 and 2 (and some deeper floo
 - **Several names.** It has 2 names on floor 1, up to 4 deeper down (pips on the boss bar). Finishing a name makes it shriek, summon two slimes and attack faster, adding letter rings to its letter fans.
 - Beating it drops three items. A Circlet of Insight shows the bell letter and the next letter as plain text.
 
+## Effect spells (✦)
+
+Tap the rune **..--** first (a non-standard Morse sign, drawn as a glowing ✦), then a spell word, then aim. Without the rune a word is a normal letter attack or block. Only effect spells cost mana (bar under HP; more mana each level, it refills slowly). Each spell has a cooldown. Everyone sees what you are typing, the rune included, so a duel opponent can see a spell coming.
+
+- **Learning**: spellbooks turn up hidden on floors, from bosses and rare enemies, and in the shop (the easy ones). Read a book (r) and a puzzle opens: a Morse cipher, an anagram, a riddle, a letter shift or mirrored Morse. Type the answer and press Enter (or tap it in Morse and aim). Solving it writes the spell into your grimoire. You can cast it once you reach the book's level (no level gates in duels).
+- **Grimoire**: G (or the Spells segment of the touch ring) lists every spell by school, known and still to find.
+- **Spell strip**: while you type ✦ it shows the known spells that fit, with mana, cooldown and level.
+- **Dumbledore**: play as `Dumbledore` to get the test character: max level, every effect spell known, full mana and one of every item in the house.
+
+| Word | Id | School | Lv | Mana | Cooldown | What it does |
+|---|---|---|---|---|---|---|
+| IGNIS | fire | elements | 1 | 12 | 5s | Throws a fire orb. Where it lands the floor burns for 5 s: every enemy standing in the flames loses a letter each second. |
+| GELU | ice | elements | 1 | 10 | 6s | Freezes a patch of floor for 6 s. Enemies on the ice walk and shoot at a crawl, and enemy letters flying over it slow down. |
+| FULGUR | bolt | elements | 5 | 16 | 6s | A very fast bolt. It takes a letter from the enemy it hits, then jumps to two more enemies nearby and takes a letter from each. |
+| TREMOR | quake | elements | 10 | 22 | 10s | The ground shakes in a wide cone in front of you: every enemy in it loses a letter and is stunned for 2 s. |
+| ASTRUM | meteor | elements | 18 | 35 | 14s | Calls a star down on the spot you aim at. A shadow grows there for 1.6 s, then it strikes: three letters off every enemy under it, and the floor burns. |
+| ROBIGO | acid | elements | 8 | 18 | 9s | A pool of acid for 7 s. Enemies in it are corroded: every correct hit on them takes one extra letter. |
+| ORBIS | nova | elements | 8 | 20 | 9s | A ring of light bursts out around you: enemies within 3 tiles lose a letter and are thrown back, and enemy letters in the ring are wiped away. |
+| RADIUS | beam | elements | 12 | 24 | 9s | A thin line shows where it goes, then a beam burns straight through: every enemy on the line loses two letters. It stops at walls. |
+| SPINA | thorn | elements | 2 | 8 | 4s | Plants a hidden spike trap where the orb lands (up to three). The first enemy to step on it loses a letter and is stuck for 2.5 s. |
+| MIASMA | poison | elements | 6 | 16 | 10s | A poison cloud for 8 s. Enemies inside lose a letter every 2 seconds. |
+| NIMBUS | storm | elements | 20 | 30 | 14s | A storm cloud over the spot you aim at for 6 s: lightning strikes enemies under it again and again, a letter each time. |
+| MAGMA | lava | elements | 20 | 30 | 14s | A river of lava flows out in front of you for 8 s. Enemies on it lose a letter every 0.8 s. |
+| GRANDO | shard | elements | 5 | 14 | 6s | Five ice shards in a fan. Each takes a letter from the enemy it hits and slows it. |
+| CHAOS | void | elements | 22 | 34 | 16s | Opens a black hole where it lands for 3 s. It drags enemies and their letters in, swallows the letters, then collapses: two letters off everything near its heart. |
+| DAEMON | imp | summons | 3 | 14 | 10s | Two imps hunt the nearest enemies for 15 s and bite: a letter per bite, two bites each. |
+| LUPUS | wolf | summons | 7 | 20 | 18s | A wolf runs beside you for 25 s and bites enemies within 5 tiles. It soaks up enemy letters aimed at it (6 of them). |
+| VESPER | bat | summons | 7 | 16 | 14s | Four bats circle you for 14 s. Each one snaps up an enemy letter that flies close, then is gone. |
+| CALVA | skull | summons | 12 | 22 | 16s | A floating skull turret for 15 s. It spits the right letter at the nearest enemy every 1.4 s. |
+| TALOS | golem | summons | 18 | 30 | 22s | A bronze golem walks toward the enemies for 20 s. Enemies near it attack it instead of you, and it soaks up 12 letters. |
+| ARANEA | spider | summons | 10 | 20 | 16s | A spider follows you for 20 s and shoots webs: the enemy it hits cannot move for 2 s. |
+| LARVA | ghost | summons | 11 | 18 | 14s | A ghost glides through walls to the nearest enemy. When it touches it, the enemy panics: it runs away and does not shoot for 4 s. |
+| IDOLUM | totem | summons | 3 | 16 | 20s | A healing totem for 12 s. You and your teammates within 3 tiles get 1 HP back every 0.8 s. |
+| IMAGO | decoy | summons | 6 | 14 | 14s | A copy of you walks off the way you aimed for 8 s. Enemies shoot at it instead; it pops after three letters. |
+| EXAMEN | swarm | summons | 15 | 24 | 16s | Seven tiny spirits zip out to the nearest enemies. Each one takes a letter and fades. |
+| DRACO | drake | summons | 24 | 36 | 24s | A small drake flies with you for 20 s, over walls, and breathes fire on enemies: a letter off each one in its breath, and the floor burns. |
+| MURUS | wall | control | 3 | 12 | 9s | Raises a wall of rune stones, five tiles wide, two tiles in front of you, for 6 s. Nothing walks or flies through it. |
+| TRAHO | pull | control | 6 | 12 | 8s | An orb that yanks the enemy it hits right in front of you. Bosses are only staggered. |
+| PELLO | push | control | 2 | 10 | 7s | A gust in front of you throws enemies 3 tiles back and turns their letters around. |
+| RADIX | root | control | 3 | 10 | 8s | An orb that roots the enemy it hits for 3 s. |
+| NEBULA | fog | control | 6 | 14 | 14s | A fog bank around you for 10 s. Enemies cannot see anyone inside it. |
+| TARDUS | slow | control | 5 | 12 | 9s | An orb that slows the enemy it hits for 5 s: it walks and shoots at half speed and its letters crawl. |
+| TACE | silence | control | 12 | 18 | 14s | An orb that silences the enemy it hits: no letters for 5 s. |
+| MUTO | swap | control | 11 | 14 | 10s | An orb: you and the enemy it hits swap places. |
+| CAVEA | cage | control | 14 | 22 | 16s | An orb that drops a cage of rune stones around the enemy it hits for 4 s. |
+| PONDUS | gravity | control | 20 | 26 | 16s | A gravity well where the orb lands, for 6 s. Enemy letters that come near curve into it and are crushed. |
+| MISCEO | scramble | control | 13 | 14 | 10s | An orb that confuses the enemy it hits for 4 s: it stumbles about and its letters fly every which way. |
+| AEGIS | mirror | utility | 10 | 16 | 12s | For 5 s the next enemy letter that would hit you bounces back and takes a letter from whoever threw it. |
+| ITERUM | echo | utility | 22 | 10 | 12s | Casts your last effect spell again, cooldown or not, for 10 mana plus half of its cost. |
+| LUX | light | utility | 1 | 6 | 8s | A bright light follows you for 25 s. It shows hidden spellbooks, traps, invisible and fogged casters near you. |
+| UMBRA | invis | utility | 12 | 18 | 16s | You turn invisible for 5 s: enemies cannot see you. Casting anything ends it. |
+| HAURIO | drain | utility | 8 | 16 | 9s | An orb that takes two letters from the enemy it hits and heals you 3 HP for each. |
+| IANUA | portal | utility | 14 | 20 | 14s | Opens two linked portals for 12 s: one at your feet, one up to 8 tiles the way you aim. Casters, enemies and spells that step in come out of the other. |
+| GEMINI | clone | utility | 25 | 28 | 18s | Your next three spells within 12 s are cast twice. The twin of an effect spell costs nothing. |
+| ANIMA | revive | utility | 5 | 30 | 30s | Wakes every downed teammate within 6 tiles at 40% HP. With nobody down, it heals you and your teammates nearby for 25%. |
+
 ## Duel room (2 players)
 
 The **Duel Arena** stands on the surface, to the right of the village square. Walk through its gate and you are in your party's duel room; when a second caster from the same room walks in, the duel starts. The arena holds two casters: a third is told it is busy and stays outside. **Esc → Back to the surface** puts you in front of the gate again.

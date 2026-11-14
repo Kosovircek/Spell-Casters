@@ -1,5 +1,5 @@
 // Everything the client knows about the current floor: the tile map and the entities on it.
-import { Player, Enemy, Chest, Spell, FloorItem, Critter } from './entities.js';
+import { Player, Enemy, Chest, Spell, FloorItem, Critter, Minion } from './entities.js';
 
 // Tile codes from the server (see server/Dungeon.js): 0 wall, 1 floor, 2 grass, 3 path, 4 tree, 5 house, 6 shop,
 // 7 house door, 8 shop door, 9 duel arena, 10 (sent as 'a') arena gate, 11 ('b') fence, 12 ('c') the fountain's
@@ -16,6 +16,8 @@ export class World {
     this.state = null;      // latest raw state message (floor, party stats, banner...)
     this.entities = new Map();
     this.clock = null;      // performance.now() minus server time, for the fastest snapshot seen lately
+    this.magic = null;      // effect spells on the floor: { z: zones, mk: marks, w: rune-stone tiles, pt: portals }
+    this.magicWalls = new Set();
   }
 
   setMap(msg) {
@@ -25,6 +27,8 @@ export class World {
   }
   tileAt(i, j) { const m = this.map; return i < 0 || j < 0 || i >= m.w || j >= m.h ? 0 : m.tiles[j * m.w + i]; }
   walkable(i, j) { return WALKABLE.has(this.tileAt(i, j)); }
+  /** Can my caster walk here right now? Like walkable, but MURUS walls and CAVEA cages are in the way. */
+  passable(i, j) { return this.walkable(i, j) && !this.magicWalls.has(j * this.map.w + i); }
   /** The shop, house or arena door at this tile, if any. */
   doorAt(i, j) { return (this.map?.doors || []).find(d => d.x === i && d.y === j) || null; }
   get ready() { return !!(this.map && this.state); }
@@ -32,6 +36,8 @@ export class World {
   /** Apply a state snapshot: create new entities, update known ones, drop the ones that are gone. */
   applyState(state) {
     this.state = state;
+    this.magic = state.magic || null;
+    this.magicWalls = new Set(this.magic ? this.magic.w : []);
     const ts = state.ts;
     if (ts !== undefined) {
       // keep the offset of the quickest arrivals: drop at once to a faster one, drift up slowly otherwise
@@ -53,6 +59,7 @@ export class World {
     sync(state.critters, d => new Critter(d));
     sync(state.items, d => new FloorItem(d));
     sync(state.projs, d => new Spell(d));
+    sync(state.minions, d => new Minion(d));
     for (const id of this.entities.keys()) if (!seen.has(id)) this.entities.delete(id);
   }
 

@@ -2,9 +2,11 @@
 import { EFFECTS } from './config.js';
 import { rnd, pick } from './util.js';
 import * as Items from './items.js';
+import { makePuzzle, solves } from './magic/books.js';
+import { SPELL_BY_ID } from './magic/spellbook.js';
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-const COMMANDS = ['quaff', 'read', 'wield', 'takeoff', 'drop', 'destroy', 'pickup'];
+const COMMANDS = ['quaff', 'read', 'wield', 'takeoff', 'drop', 'destroy', 'pickup', 'solve', 'unstudy'];
 
 export class ItemCommands {
   constructor(room) {
@@ -34,6 +36,7 @@ export class ItemCommands {
 
   read(pl, item) {
     const room = this.room;
+    if (item && Items.info(item).type === 'book') return this.study(pl, item);
     if (!item || Items.info(item).type !== 'scroll') return pl.tell('You cannot read that.');
     if (Items.info(item).travel) { // Recall and the descent scrolls carry the reader (only), after a few seconds
       const to = Items.info(item).depth ?? (room.floor > 0 ? 0 : room.maxDepth);
@@ -60,6 +63,36 @@ export class ItemCommands {
     }
     this.used(pl, item);
   }
+
+  // ------------------------------------------------------------------ spellbooks
+  /** Open a spellbook: its puzzle goes to the reader's screen. A new puzzle every time it is opened. */
+  study(pl, item) {
+    const d = Items.info(item), sp = SPELL_BY_ID[d.spell];
+    if (pl.magic.knows(sp.id)) return pl.tell(`You already know the spell in this book (${sp.word}). You could sell it, or give it to a teammate.`);
+    const pz = makePuzzle(sp.id);
+    pl.puzzle = { itemId: item.id, spell: sp.id, answers: pz.answers, tries: 0 };
+    pl.send({ t: 'puzzle', id: item.id, title: pz.title, kind: pz.kind, lines: pz.lines, code: pz.code || null, school: sp.school });
+  }
+  /** An answer to the open puzzle. Right: the spell is learned and the book crumbles. */
+  solve(pl, _item, m) {
+    const pz = pl.puzzle;
+    if (!pz) return;
+    const item = pl.pack.find(it => it.id === pz.itemId);
+    if (!item) { pl.puzzle = null; return pl.send({ t: 'puzzle', id: null }); }
+    if (!solves(pz, m.a)) {
+      pz.tries++;
+      return pl.send({ t: 'puzzleWrong', tries: pz.tries, text: pz.tries >= 3 ? 'The runes swim before your eyes. Close the book and open it again for a new page.' : 'The runes stay dark. That is not it.' });
+    }
+    const sp = SPELL_BY_ID[pz.spell];
+    pl.puzzle = null;
+    this.takeOne(pl, item);
+    pl.magic.learn(sp.id);
+    const ready = pl.level >= sp.level ? `Cast it with the rune ..-- then ${sp.word}, then a direction.` : `You can cast it once you reach level ${sp.level}.`;
+    pl.send({ t: 'learned', id: sp.id, word: sp.word, text: ready });
+    pl.tell(`The book crumbles to dust. You have learned ${sp.word}! ${ready}`);
+    this.room.emit({ t: 'learn', x: pl.x, y: pl.y, c: pl.color, w: sp.word });
+  }
+  unstudy(pl) { pl.puzzle = null; }
 
   wield(pl, item, m) {
     if (!item || !Items.isGear(item)) return pl.tell('You cannot wear or wield that.');

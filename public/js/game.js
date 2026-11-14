@@ -19,6 +19,8 @@ import { RingMenu } from './ring.js';
 import { Lobby } from './lobby.js';
 import { BellChant } from './bell.js';
 import { Prediction } from './prediction.js';
+import { Grimoire } from './grimoire.js';
+import { RUNE } from './morse.js';
 
 export class Game {
   constructor() {
@@ -34,7 +36,11 @@ export class Game {
     this.music = this.audio.music = new Music(this.audio, this.settings);
     this.morse = new MorseKey({
       wpm: this.settings.wpm, gapUnits: this.settings.gap,
-      onChange: () => { if (this.morse.bad) this.audio.play('bad'); this.hud.renderMorse(this.morse); this.shareTyping(); },
+      onChange: () => {
+        if (this.morse.bad) this.audio.play('bad');
+        this.hud.renderMorse(this.morse); this.shareTyping();
+        if (this.grimoire) this.hud.renderSpellbar(this.morse, this.me, this.grimoire);
+      },
     });
     this.settings.onChange(s => { this.music.applyVolume(); this.morse.wpm = s.wpm; this.morse.gapUnits = s.gap; this.hud.renderMorse(this.morse); });
 
@@ -43,16 +49,18 @@ export class Game {
     this.renderer = new Renderer($('game'));
     this.particles = new Particles();
     this.hud = new Hud();
-    this.effects = new EventEffects({ audio: this.audio, particles: this.particles, renderer: this.renderer, getMyId: () => this.myId });
+    this.effects = new EventEffects({ audio: this.audio, particles: this.particles, renderer: this.renderer, getMyId: () => this.myId, world: this.world });
     this.inventory = new InventoryMenu({ el: $('menu'), network: this.network, getMe: () => this.me, message: (t) => this.hud.message(t) });
     this.doorKind = null; // the shop or house door my caster is walking into, if any
     this.store = new StoreMenu({
       el: $('menu'), network: this.network, getMe: () => this.me, inventory: this.inventory,
-      onOpen: () => { this.inventory.close(); this.ring?.close(); this.input.stopWalking(); },
+      onOpen: () => { this.inventory.close(); this.ring?.close(); this.grimoire?.close(); this.input.stopWalking(); },
     });
     this.bell = new BellChant({ audio: this.audio, settings: this.settings });
     this.input = new Input(this);
     this.ring = new RingMenu(this);
+    this.grimoire = new Grimoire(this);
+    this.inventory.knows = (id) => this.grimoire.known.has(id); // spellbooks you already know say so
     this.touch = new TouchInput(this);
     this.prediction = new Prediction(this);
     this.lobby = new Lobby((name, room) => this.join(name, room));
@@ -100,12 +108,12 @@ export class Game {
     this.myId = m.id; this.roomCode = m.room;
     this.hud.show(m.room, m.duel);
     $('leave-arena').hidden = !m.duel;
-    if (m.duel) { this.cheatWasHidden = $('cheat').hidden; $('cheat').hidden = true; } // the cheat sheet would cover one end of the duel platform (H shows it)
-    else if (switching && this.cheatWasHidden !== undefined) $('cheat').hidden = this.cheatWasHidden;
+    if (m.duel) { this.cheatWasHidden = $('side').hidden; $('side').hidden = true; } // the cheat sheet would cover one end of the duel platform (H shows it)
+    else if (switching && this.cheatWasHidden !== undefined) $('side').hidden = this.cheatWasHidden;
     this.typingSent = null; // the new room has not heard what I am typing
     if (!switching) return;
     this.morse.clear();
-    this.inventory.close(); this.store.close(); this.ring.close();
+    this.inventory.close(); this.store.close(); this.ring.close(); this.grimoire.close();
     this.input.lastMove = null; // the new room's caster has not been told how I walk yet
     this.input.stopWalking();
   }
@@ -121,6 +129,22 @@ export class Game {
     this.network.typing(m.spell, m.buf, m.isDown);
   }
 
+  /** MISCEO hit me: the letters I have typed are shuffled (the rune stays first). */
+  scrambleSpell() {
+    const m = this.morse, rune = m.isRune, letters = [...(rune ? m.spell.slice(1) : m.spell)];
+    for (let i = letters.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [letters[i], letters[j]] = [letters[j], letters[i]]; }
+    m.spell = (rune ? RUNE : '') + letters.join('');
+    m.onChange();
+    if (letters.length > 1) this.hud.message('Your letters tumble about!');
+  }
+  /** Can I see something hidden at e (an invisible caster, a trap, a hidden book)? My LUX shows it within 6 tiles; near = closer than this always works. */
+  seeHidden(e, near = 0) {
+    const me = this.world.player(this.myId);
+    if (!me) return false;
+    const d = Math.hypot(e.x - me.x, e.y - me.y);
+    return d < near || (!!me.data.st?.includes('lit') && d < 6);
+  }
+
   /** My own player snapshot (pack, equipment, hp...). */
   get me() { return this.world.state?.players.find(p => p.id === this.myId) || null; }
   isPlaying() { return this.hud.visible && !this.settings.panelOpen; }
@@ -134,6 +158,12 @@ export class Game {
       .on('store', (m) => { if (m.kind && m.kind !== this.doorKind) return; this.store.show(m); }) // ignore it if I already walked away
       .on('state', (m) => this.onState(m))
       .on('msg', (m) => this.hud.message(m.text))
+      .on('grimoire', (m) => this.grimoire.setCatalog(m))
+      .on('puzzle', (m) => this.grimoire.showPuzzle(m))
+      .on('puzzleWrong', (m) => this.grimoire.wrong(m))
+      .on('learned', (m) => { this.grimoire.learned(m); this.audio.play('chest'); })
+      .on('drop', () => { if (this.morse.spell || this.morse.buf) { this.morse.clear(); this.hud.message('Something cold brushes past: your spell slips away!'); } })
+      .on('scramble', () => this.scrambleSpell())
       .on('close', () => { if (this.hud.visible) this.hud.banner('Disconnected. Refresh to rejoin.', 99999); });
   }
 
@@ -153,6 +183,9 @@ export class Game {
     this.hudState = null;
     this.inventory.refresh();
     this.store.refresh();
+    this.grimoire.refresh();
+    this.hud.renderSpellbar(this.morse, this.me, this.grimoire);
+    this.hud.renderSpellCheat(this.me, this.grimoire);
     this.ring.refresh();
     this.announceItemsHere();
     this.hud.renderParty(state, this.myId);
@@ -252,6 +285,8 @@ export class Game {
       insight: !!meData?.stats?.fx?.includes('insight'), // Circlet of Insight or the Eye of Odin
       duel: !!world.map?.duel,
       hitboxes: this.settings.showHitboxes(!!world.map?.duel),
+      seeHidden: (e, near) => this.seeHidden(e, near),
+      spellSchool: (id) => this.grimoire.schoolOf(id),
     });
     this.ring.place();
     this.checkDoor();

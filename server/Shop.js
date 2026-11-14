@@ -15,6 +15,8 @@ export const SHOP_TABS = ['magic', 'weapons', 'armour', 'sell'];
 const STOCK = [
   ...['pot_heal', 'pot_speed', 'pot_ward', 'scr_tele', 'scr_slow', 'scr_life', 'scr_recall', 'scr_d10', 'scr_d20', 'scr_d30', 'scr_d40', 'scr_d50']
     .map(kind => ({ kind })),
+  // a few beginner spellbooks; the rest are found in the dungeon
+  ...['bk_light', 'bk_fire', 'bk_ice', 'bk_thorn', 'bk_push'].map(kind => ({ kind })),
   ...['wand', 'spear', 'rod', 'staff', 'blade'].flatMap(b => [0, 1].map(mat => ({ kind: 'c_' + b, mat }))),
   ...['helm', 'mail', 'cloak', 'boots', 'shield'].flatMap(b => [0, 1].map(mat => ({ kind: 'c_' + b, mat }))),
 ].map(spec => {
@@ -95,7 +97,7 @@ export class Shop {
   // ------------------------------------------------------------------ house
   stash(pl, item) {
     if (!item) return;
-    if (!Items.addToPack(pl.home, item, Items.HOME_SIZE)) return pl.tell('Your house is full.');
+    if (!Items.addToPack(pl.home, item, pl.homeSize)) return pl.tell('Your house is full.');
     pl.pack.splice(pl.pack.indexOf(item), 1);
     pl.tell(`You leave ${Items.displayName(item)} in your house.`);
   }
@@ -109,6 +111,6 @@ export class Shop {
   /** The store screen's contents for this caster. Sent when they walk in and after every trade. */
   send(pl, kind) {
     if (kind === 'shop') pl.send({ t: 'store', kind, name: 'Dot & Dash Goods', gold: pl.gold, rows: this.listing() });
-    else pl.send({ t: 'store', kind: 'home', name: 'Your house', gold: pl.gold, items: pl.home.map(Items.toClient), size: Items.HOME_SIZE });
+    else pl.send({ t: 'store', kind: 'home', name: 'Your house', gold: pl.gold, items: pl.home.map(Items.toClient), size: pl.homeSize });
   }
 }

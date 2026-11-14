@@ -22,7 +22,7 @@ export class Prediction {
 
   /** Is the circle of my caster at (x, y) inside a wall? Same test as Dungeon.blocked on the server. */
   blocked(x, y) {
-    const w = this.game.world, solid = (px, py) => !w.walkable(Math.floor(px), Math.floor(py));
+    const w = this.game.world, solid = (px, py) => !w.passable(Math.floor(px), Math.floor(py));
     return solid(x - RADIUS, y - RADIUS) || solid(x + RADIUS, y - RADIUS) || solid(x - RADIUS, y + RADIUS) || solid(x + RADIUS, y + RADIUS);
   }
 
@@ -43,7 +43,8 @@ export class Prediction {
     }
 
     // walk: x and y separately so you slide along walls, exactly like Actor.moveBy
-    const dir = this.game.input.dir, step = d.spd * dt;
+    const flip = d.st?.includes('confuse') ? -1 : 1; // MISCEO reverses walking (the server does the same)
+    const dir = { x: this.game.input.dir.x * flip, y: this.game.input.dir.y * flip }, step = d.spd * dt;
     if (dir.x || dir.y) {
       const dx = dir.x * step, dy = dir.y * step;
       if (!this.blocked(p.x + dx, p.y)) p.x += dx;

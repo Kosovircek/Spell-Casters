@@ -14,6 +14,8 @@ import { xpToNext, baseHp, armorFactor, letterDamage } from './progression.js';
 import { rnd, pick } from './util.js';
 import * as Items from './items.js';
 import { def, PACE } from './bestiary.js';
+import { Grimoire } from './magic/Grimoire.js';
+import { RUNE } from './magic/spellbook.js';
 
 let lastId = 0;
 export const newId = () => ++lastId;
@@ -36,15 +38,33 @@ export class Entity {
   snapshot() { return { id: this.id, x: round3(this.x), y: round3(this.y) }; }
 }
 
-/** An entity that walks around and collides with walls. */
+/**
+ * An entity that walks around and collides with walls. Effect spells put timed statuses on actors
+ * (root, slow, silence, stun, fear, confuse, corrode, mirror, invis, lit...) and can shove them (knock).
+ */
 export class Actor extends Entity {
   constructor(x, y, radius) {
     super(x, y);
     this.radius = radius;
+    this.status = {};   // status name -> time (ms) it wears off
+    this.knock = null;  // { vx, vy, until }: being shoved (tiles per second)
   }
   moveBy(dungeon, dx, dy) {
     if (!dungeon.blocked(this.x + dx, this.y, this.radius)) this.x += dx;
     if (!dungeon.blocked(this.x, this.y + dy, this.radius)) this.y += dy;
+  }
+  /** Put a status on me for ms (a longer one already running is kept). */
+  setStatus(name, ms, now = Date.now()) { this.status[name] = Math.max(this.status[name] || 0, now + ms); }
+  clearStatus(name) { delete this.status[name]; }
+  is(name, now = Date.now()) { return (this.status[name] || 0) > now; }
+  /** The statuses running right now, for the client's icons. */
+  statusList(now) { return Object.keys(this.status).filter(k => this.status[k] > now); }
+  /** Shove me (vx, vy in tiles per second) for secs. Walls stop it like they stop walking. */
+  shove(vx, vy, secs, now = Date.now()) { this.knock = { vx, vy, until: now + secs * 1000 }; }
+  applyKnock(dungeon, now) {
+    if (!this.knock) return;
+    if (now >= this.knock.until) { this.knock = null; return; }
+    this.moveBy(dungeon, this.knock.vx * DT, this.knock.vy * DT);
   }
 }
 
@@ -114,8 +134,13 @@ export class Player extends Actor {
     this.onStairs = null;               // 'up' / 'down' while standing on stairs: you have to step onto them to use them
     this.missedEvents = [];             // events from states skipped while the connection was busy
     this.equip = Object.fromEntries(Items.SLOTS.map(k => [k, null]));
+    this.magic = new Grimoire(this);    // effect spells: what I know, mana, cooldowns
+    this.puzzle = null;                 // the spellbook puzzle I am working on, if any
+    this.fogged = false;                // standing in a fog bank (set by the room's magic every tick)
+    this.homeSize = Items.HOME_SIZE;    // how much my house holds
     this.refreshStats();
     this.hp = this.maxHp;
+    this.magic.fill();
   }
 
   // ---- networking
@@ -134,10 +159,13 @@ export class Player extends Actor {
   }
   /** Angband-style message for this player only. */
   tell(text) { this.send({ t: 'msg', text }); }
+  /** My grimoire screen (spell list and what I know), whenever it changed. */
+  sendGrimoire() { this.send(this.magic.message()); }
   /** What this caster is typing right now, so everyone else can read it above them. Cleared when the spell is cast. */
   setTyping(s, b, k) {
     this.typing = {
-      s: String(s || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 12),
+      // the rune (an effect spell) may only open the spell
+      s: String(s || '').toUpperCase().replace(/[^A-Z*]/g, '').replace(/(?!^)\*/g, '').slice(0, 14),
       b: String(b || '').replace(/[^.-]/g, '').slice(0, 5),
       k: !!k,
     };
@@ -167,14 +195,20 @@ export class Player extends Actor {
   get luck() { return this.stats.luck; }
   get maxLetters() { return this.stats.letters || SPELL.maxLetters; }
   get moveSpeed() {
-    if (this.frozenUntil > Date.now()) return 0;
-    return PLAYER.speed * (this.swiftUntil > Date.now() ? 1.5 : 1) * (1 + LEVELS.speedPerLevel * (this.level - 1) + this.stats.speed);
+    const now = Date.now();
+    if (this.frozenUntil > now || this.is('root', now) || this.is('stun', now)) return 0;
+    const slow = this.is('slow', now) || this.is('chill', now) ? 0.5 : 1;
+    return PLAYER.speed * slow * (this.swiftUntil > now ? 1.5 : 1) * (1 + LEVELS.speedPerLevel * (this.level - 1) + this.stats.speed);
   }
-  get spellSpeed() { return SPELL.speed * (1 + this.stats.haste); }
+  get spellSpeed() { return SPELL.speed * (1 + this.stats.haste) * (this.is('slow') ? 0.5 : 1); }
+  /** Silenced or stunned casters cannot cast at all. */
+  get silenced() { const now = Date.now(); return this.is('silence', now) || this.is('stun', now); }
+  /** Invisible (UMBRA) or inside a fog bank, and not lit up by someone's light. */
+  get concealed() { return (this.is('invis') || this.fogged) && !this.revealed; }
   get reach() { return 1 + this.stats.reach; }
   /** Can enemies see me from this far away? (Helm of Hades, Ring of Gyges) */
   visibleFrom(d, now) {
-    if (this.vanishUntil > now) return false;
+    if (this.vanishUntil > now || this.concealed) return false;
     return d < (this.has('hidden') ? 5 : 10);
   }
 
@@ -227,8 +261,11 @@ export class Player extends Actor {
     }
     let mx = this.mx, my = this.my; const m = Math.hypot(mx, my);
     if (m > 1) { mx /= m; my /= m; }
+    if (this.is('confuse', now)) { mx = -mx; my = -my; } // MISCEO: walking is reversed
     const spd = this.moveSpeed;
     this.moveBy(room.dungeon, mx * spd * DT, my * spd * DT);
+    this.applyKnock(room.dungeon, now);
+    this.magic.tick(DT);
     this.regenerate(room, now);
     if (this.has('trail') && (m > 0.1) && (!this.trail.length || now - this.trail[this.trail.length - 1].t > 150)) {
       this.trail.push({ x: this.x, y: this.y, t: now });
@@ -288,7 +325,7 @@ export class Player extends Actor {
 
   // ---- saving: what a player keeps when the lobby is saved and resumed
   toSave() {
-    return { name: this.name, floor: this.floor, x: this.x, y: this.y, hp: this.hp, dead: this.dead, level: this.level, xp: this.xp, kills: this.kills, blocks: this.blocks, ward: this.ward, gold: this.gold, pack: this.pack, home: this.home, equip: this.equip, practiceBest: this.practiceBest };
+    return { name: this.name, floor: this.floor, x: this.x, y: this.y, hp: this.hp, dead: this.dead, level: this.level, xp: this.xp, kills: this.kills, blocks: this.blocks, ward: this.ward, gold: this.gold, pack: this.pack, home: this.home, equip: this.equip, practiceBest: this.practiceBest, magic: this.magic.toSave() };
   }
   /** Take back saved progress (matched by name when someone rejoins). Saves from before levelling start at level 1. */
   restore(s) {
@@ -307,6 +344,7 @@ export class Player extends Actor {
     this.kills = s.kills | 0; this.blocks = s.blocks | 0; this.ward = s.ward | 0; this.practiceBest = s.practiceBest | 0;
     if (Number.isFinite(s.x) && Number.isFinite(s.y)) { this.x = s.x; this.y = s.y; }
     this.refreshStats();
+    this.magic.restore(s.magic);
     const oldSave = !s.level; // hearts, not HP: start full
     this.hp = s.dead || oldSave ? this.maxHp : Math.max(1, Math.min(this.maxHp, s.hp | 0));
   }
@@ -320,7 +358,9 @@ export class Player extends Actor {
       hurt: this.hurt > 0, respawn: this.dead ? Math.max(0, Math.ceil((this.respawnAt - now) / 1000)) : 0,
       kills: this.kills, blocks: this.blocks, hidden: this.vanishUntil > now, gold: this.gold,
       swift: this.swiftUntil > now ? Math.ceil((this.swiftUntil - now) / 1000) : 0, ward: this.ward, frozen: this.frozenUntil > now,
-      ...(this.typing.s || this.typing.b || this.typing.k ? { ty: this.typing } : {}), // left out while idle
+      // what I am typing, left out while idle (and while fog or invisibility hides me; my own screen has it anyway)
+      ...((this.typing.s || this.typing.b || this.typing.k) && !this.concealed ? { ty: this.typing } : {}),
+      ...this.magic.snapshot(now), st: this.statusList(now), conc: this.concealed,
       stats: {
         armor: st.armor, cut: Math.round((1 - armorFactor(st.armor)) * 100), speed: Math.round(this.moveSpeed / PLAYER.speed * 100),
         luck: st.luck, letters: this.maxLetters, haste: Math.round(st.haste * 100), reach: Math.round(st.reach * 100),
@@ -448,17 +488,31 @@ export class Enemy extends Actor {
     this.lock.tick();
     if (this.burnAt && now >= this.burnAt) { const by = this.burnBy; this.burnAt = 0; this.burnBy = null; room.chip(this, by, 'burn'); }
     this.think(room, now, alive);
-    if (this.removed || this.stunUntil > now) return;
+    if (this.removed) return;
+    this.applyKnock(room.dungeon, now);
+    if (this.stunUntil > now || this.is('stun', now)) return;
+    // effect spells: decoys and golems draw enemies to them; slowed enemies do everything at half speed
+    const targets = room.magic ? room.magic.targetsFor(this, alive, now) : alive;
+    const pace = this.is('slow', now) ? 0.5 : this.is('chill', now) ? 0.4 : 1;
     let target = null, td = Infinity;
-    for (const pl of alive) {
+    for (const pl of targets) {
       const d = this.distanceTo(pl);
-      if (d < td && pl.visibleFrom(d, now) && room.dungeon.los(this.x, this.y, pl.x, pl.y)) { td = d; target = pl; }
+      const lure = pl.lure ? 0.6 : 1; // a taunting golem or a decoy wins over a caster at the same distance
+      if (d * lure < td && pl.visibleFrom(d, now) && room.dungeon.los(this.x, this.y, pl.x, pl.y)) { td = d * lure; target = pl; }
     }
     if (!target) return;
+    td = this.distanceTo(target) || 0.001;
     if (!this.awake) { this.awake = true; this.fireCd = rnd(1.5, 3); this.wake(room, now); }
 
-    const ux = (target.x - this.x) / td, uy = (target.y - this.y) / td;
-    let [vx, vy] = this.moveVector(room, target, td, ux, uy, now);
+    let ux = (target.x - this.x) / td, uy = (target.y - this.y) / td;
+    const scared = this.is('fear', now), confused = this.is('confuse', now);
+    let [vx, vy] = scared ? [-ux * 1.3, -uy * 1.3] : this.moveVector(room, target, td, ux, uy, now);
+    if (confused) { // MISCEO: stumbles about, and its letters fly anywhere
+      if (now >= (this.stumbleAt || 0)) { const a = Math.random() * Math.PI * 2; this.stumble = [Math.cos(a), Math.sin(a)]; this.stumbleAt = now + 500; }
+      [vx, vy] = this.stumble;
+      const a = Math.random() * Math.PI * 2; ux = Math.cos(a); uy = Math.sin(a);
+    }
+    if (this.is('root', now)) { vx = 0; vy = 0; }
     for (const o of room.enemies) { // keep a little space from other enemies
       if (o === this) continue;
       const d = this.distanceTo(o);
@@ -466,11 +520,12 @@ export class Enemy extends Actor {
     }
     const m = Math.hypot(vx, vy);
     if (m > 1.6) { vx *= 1.6 / m; vy *= 1.6 / m; }
-    this.moveBy(room.dungeon, vx * this.walkSpeed * DT, vy * this.walkSpeed * DT);
+    this.moveBy(room.dungeon, vx * this.walkSpeed * pace * DT, vy * this.walkSpeed * pace * DT);
 
     // a Warhorn Goblin nearby makes everyone around it throw twice as fast
     const horn = room.enemies.some(o => o.horn && o !== this && !o.removed && o.distanceTo(this) < 5);
-    this.fireCd -= DT * (horn ? 2 : 1);
+    this.fireCd -= DT * (horn ? 2 : 1) * pace;
+    if (scared || this.is('silence', now)) this.fireCd = Math.max(this.fireCd, 0.5); // no letters while panicking or silenced
     if (this.fireCd <= 0) {
       this.fireCd = this.nextFireDelay(room.floor);
       this.attack(room, ux, uy, shots, target, now);
@@ -479,7 +534,8 @@ export class Enemy extends Actor {
   /** Called once, when I first see a caster. */
   wake(room, now) {}
   snapshot() {
-    return { ...super.snapshot(), type: this.type, ...this.lock.snapshot(), awake: this.awake, stun: this.stunned, burn: !!this.burnAt, ...this.label(Date.now()) };
+    const now = Date.now(), st = this.statusList(now);
+    return { ...super.snapshot(), type: this.type, ...this.lock.snapshot(), awake: this.awake, stun: this.stunned || st.includes('stun'), burn: !!this.burnAt, ...(st.length ? { st } : {}), ...this.label(now) };
   }
   toSave() { return { type: this.type, x: this.x, y: this.y, lock: this.lock.toSave() }; }
 }
@@ -651,7 +707,7 @@ export class Spell extends Entity {
   }
   get fromPlayer() { return false; }
   /** Speed multiplier this tick (enemy spells slow down under Slow Time). */
-  timeScale(room, now) { return 1; }
+  timeScale(room, now) { return this.chilled ? 0.5 : 1; } // GELU: flying over ice
   /** Hit a wall. Return true if the spell survives. */
   onWall(room, prevX, prevY) { room.emit({ t: 'fizzle', x: this.x, y: this.y }); return false; }
 
@@ -673,7 +729,9 @@ export class EnemySpell extends Spell {
     this.countered = false; // a cloak already fired at it
     this.slowed = false;    // crossed a Sleipnir trail
   }
-  timeScale(room, now) { return (room.slowUntil > now ? 0.4 : 1) * (this.slowed ? 0.5 : 1); }
+  timeScale(room, now) {
+    return (room.slowUntil > now ? 0.4 : 1) * (this.slowed ? 0.5 : 1) * (this.chilled ? 0.5 : 1) * (this.source?.is?.('slow', now) ? 0.5 : 1);
+  }
 }
 
 /** Cast by a player: homes on a target and finds its way around walls. */
@@ -748,10 +806,11 @@ export class FloorItem extends Entity {
     this.id = item.id; // items keep their own id so they stay the same object across pack and floor
     this.item = item;
   }
-  toSave() { return { x: this.x, y: this.y, item: this.item }; }
-  static fromSave(s) { const it = Items.restoreItem(s.item); return it ? new FloorItem(it, s.x, s.y) : null; }
+  toSave() { return { x: this.x, y: this.y, item: this.item, ...(this.hidden ? { hidden: true } : {}) }; }
+  static fromSave(s) { const it = Items.restoreItem(s.item); if (!it) return null; const f = new FloorItem(it, s.x, s.y); f.hidden = !!s.hidden; return f; }
   snapshot() {
     const d = Items.info(this.item);
-    return { id: this.id, x: this.x, y: this.y, kind: this.item.kind, type: d.type, slot: d.slot || null, name: Items.displayName(this.item), lvl: d.level || 0, color: Items.itemColor(this.item) };
+    // hidden: a spellbook tucked away in a corner; the client only draws it up close or in LUX's light
+    return { id: this.id, x: this.x, y: this.y, kind: this.item.kind, type: d.type, slot: d.slot || null, name: Items.displayName(this.item), lvl: d.level || 0, color: Items.itemColor(this.item), ...(this.hidden ? { h: 1 } : {}) };
   }
 }

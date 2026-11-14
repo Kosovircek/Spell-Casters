@@ -1,6 +1,18 @@
 // The HTML overlay: party list, floor info, banner, Morse input box, cheat sheet and message line.
 import { $, escapeHtml, prettyMorse } from './constants.js';
-import { MORSE, FROM_MORSE } from './morse.js';
+import { MORSE, FROM_MORSE, RUNE, RUNE_MORSE } from './morse.js';
+
+/** What the status names from effect spells read as in the party panel. */
+const STATUS_NAMES = {
+  root: 'Rooted', slow: 'Slowed', chill: 'Chilled', silence: 'Silenced', stun: 'Stunned', confuse: 'Confused',
+  corrode: 'Corroded', fear: 'Afraid', mirror: 'Mirror', invis: 'Invisible', lit: 'Light',
+};
+/** The typed spell as HTML: the rune as a glowing star, then the letters. */
+export function spellHtml(spell) {
+  if (!spell) return '';
+  if (spell[0] !== RUNE) return `<span class="ch">${spell}</span>`;
+  return `<span class="rune">✦</span>${spell.length > 1 ? `<span class="ch rch">${spell.slice(1)}</span>` : ''}`;
+}
 
 export class Hud {
   constructor() {
@@ -14,7 +26,7 @@ export class Hud {
     $('roomcode').textContent = this.roomLine;
   }
   get visible() { return !$('hud').hidden; }
-  toggleCheatSheet() { $('cheat').hidden = !$('cheat').hidden; }
+  toggleCheatSheet() { $('side').hidden = !$('side').hidden; }
 
   // ---- banner (big centred text)
   banner(text, ms = 400) {
@@ -69,6 +81,7 @@ export class Hud {
     const low = hpPct <= 30 ? ' low' : '';
     let html = p.dead ? `<div class="down">${duel ? 'defeated' : `down, back in ${p.respawn}s`}</div>`
       : `<div class="bar hpbar${low}"><i style="width:${hpPct}%"></i><span>${p.hp} / ${p.maxHp}</span></div>`;
+    if (p.maxMana && !p.dead) html += `<div class="bar manabar${mine ? '' : ' thin'}"><i style="width:${Math.min(100, p.mana / p.maxMana * 100)}%"></i>${mine ? `<span>Mana ${p.mana} / ${p.maxMana}</span>` : ''}</div>`;
     if (mine) html += p.xpNext ? `<div class="bar xpbar"><i style="width:${Math.min(100, p.xp / p.xpNext * 100)}%"></i><span>XP ${p.xp} / ${p.xpNext}</span></div>`
       : `<div class="bar xpbar"><i style="width:100%"></i><span>Max level</span></div>`;
     return html;
@@ -80,6 +93,8 @@ export class Hud {
     if (p.equip && p.equip.cloak && p.equip.cloak.letter) fx.push(`<span class="fx">Mantle ${p.equip.cloak.letter}</span>`);
     if (p.stats && p.stats.blocks) fx.push(`<span class="fx">Shield ${p.stats.blocks}</span>`);
     if (p.hidden) fx.push(`<span class="fx">Invisible</span>`);
+    for (const st of p.st || []) if (STATUS_NAMES[st] && !(st === 'invis' && p.hidden)) fx.push(`<span class="fx st-${st}">${STATUS_NAMES[st]}</span>`);
+    if (p.clone) fx.push(`<span class="fx st-clone">Twin ×${p.clone}</span>`);
     return fx.length ? `<div class="effects">${fx.join(' ')}</div>` : '';
   }
 
@@ -117,21 +132,49 @@ export class Hud {
 
   // ---- Morse input box
   renderMorse(morse) {
-    let html = morse.spell ? `<span class="ch">${morse.spell}</span>` : '';
-    if (morse.buf) { const guess = FROM_MORSE[morse.buf]; html += ` ${prettyMorse(morse.buf)}${guess ? ' <span style="color:#6f6040">' + guess + '</span>' : ''}`; }
+    let html = spellHtml(morse.spell);
+    if (morse.buf) {
+      const guess = morse.buf === RUNE_MORSE && !morse.spell ? '✦' : FROM_MORSE[morse.buf];
+      html += ` ${prettyMorse(morse.buf)}${guess ? ' <span style="color:#6f6040">' + guess + '</span>' : ''}`;
+    }
     else if (morse.bad) html += ` <span class="bad">${prettyMorse(morse.bad)} ?</span>`;
     $('morse-buf').innerHTML = html || '&nbsp;';
     const h = $('morse-hint');
     if (this.touchMode) {
       if (morse.bad && !morse.buf) h.textContent = 'Not a letter, it was dropped. Keep tapping or swipe to cast.';
       else if (morse.buf) h.textContent = 'Keep tapping, pause for the next letter, or swipe to cast';
+      else if (morse.isRune) h.textContent = morse.spell.length > 1 ? `Swipe to cast ✦${morse.spell.slice(1)}` : 'Rune ✦: spell an effect spell, then swipe';
       else if (morse.spell) h.textContent = `Add letters, or swipe on the right to cast ${morse.spell}`;
       else h.textContent = 'Tap = dot, hold = dash, swipe = cast. Drag on the left to walk';
     }
     else if (morse.bad && !morse.buf) h.textContent = 'Not a letter, it was dropped. Keep typing or aim to cast.';
     else if (morse.buf) h.textContent = 'Keep tapping, pause for the next letter, or aim to cast';
+    else if (morse.isRune && morse.spell.length === 1) h.textContent = 'Rune ✦: now spell an effect spell from your grimoire (G), then aim';
+    else if (morse.isRune) h.textContent = `Aim with the numpad to cast ✦${morse.spell.slice(1)}. G opens your grimoire.`;
     else if (morse.spell) h.textContent = `Add letters, or aim with the numpad to cast ${morse.spell}. Backspace removes a letter.`;
     else h.textContent = 'Tap Numpad 5 (or Space). Short = dot, long = dash. Numpad 0 = instant dash';
+  }
+  /**
+   * The spell strip above the Morse box. While an effect spell is being typed it lists the known spells that fit
+   * what you have typed so far (with mana, cooldown and level); otherwise the effect spells still cooling down.
+   */
+  renderSpellbar(morse, me, grimoire) {
+    const el = $('spellbar');
+    if (!me || !grimoire.catalog.length) return this.setHtml(el, '');
+    const chip = (sp) => {
+      const cd = me.cd?.[sp.id], low = me.mana < sp.mana, locked = me.side === undefined && me.lv < sp.level; // no level gates in a duel
+      const cls = locked ? 'locked' : cd ? 'cool' : low ? 'low' : 'ready';
+      const note = locked ? `Lv ${sp.level}` : cd ? `${cd.toFixed(1)}s` : `${sp.mana}`;
+      return `<span class="sp ${cls} sc-${sp.school}">${sp.word}<i>${note}</i></span>`;
+    };
+    if (morse.isRune) {
+      const typed = morse.spell.slice(1);
+      const fits = grimoire.catalog.filter(sp => grimoire.known.has(sp.id) && sp.word.startsWith(typed));
+      const none = grimoire.known.size ? `No spell you know starts with ${typed}` : 'You know no effect spells yet: find a spellbook';
+      return this.setHtml(el, `<span class="sb-mana">✦ ${me.mana}</span>` + (fits.length ? fits.slice(0, 8).map(sp => chip(sp)).join('') : `<span class="sp none">${none}</span>`));
+    }
+    const cooling = grimoire.catalog.filter(sp => me.cd?.[sp.id]);
+    this.setHtml(el, cooling.length ? cooling.map(sp => chip(sp)).join('') : '');
   }
   /** Bar that fills while the key is held; it turns yellow once the press counts as a dash. */
   renderHoldBar(morse, now) {
@@ -144,6 +187,23 @@ export class Hud {
     } else bar.style.width = '0';
   }
 
+  /**
+   * Effect spell cheat sheet under the Morse one, for Dumbledore (the test character who knows every spell):
+   * each school in a column, dimmed while a spell cools down or you lack the mana.
+   */
+  renderSpellCheat(me, grimoire) {
+    const el = $('spellcheat'), show = !!me && String(me.name || '').trim().toLowerCase() === 'dumbledore' && grimoire.catalog.length > 0;
+    el.hidden = !show;
+    if (!show) return;
+    const cols = ['elements', 'summons', 'control', 'utility'].map(school => {
+      const rows = grimoire.catalog.filter(sp => sp.school === school).map(sp => {
+        const off = me.cd?.[sp.id] || me.mana < sp.mana;
+        return `<div class="${off ? 'off' : 'on'}" title="${sp.desc.replace(/"/g, '&quot;')}">${sp.word}<i>${sp.mana}</i></div>`;
+      }).join('');
+      return `<div class="col sc-${school}"><div class="sh">${school[0].toUpperCase() + school.slice(1)}</div>${rows}</div>`;
+    }).join('');
+    this.setHtml(el, `<div class="hd">Effect spells: ✦ ..-- then the word</div><div class="cols">${cols}</div>`);
+  }
   /** Morse cheat sheet; letters used on this floor are bright. */
   renderCheatSheet(pool) {
     $('cheat').innerHTML = '<div style="column-span:all;color:#9a8fb0;margin-bottom:4px">Morse (H to hide)</div>' +

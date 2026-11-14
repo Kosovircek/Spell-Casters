@@ -25,6 +25,7 @@ export class Dungeon {
     this.h = size.h;
     this.tiles = new Uint8Array(this.w * this.h); // 0 = wall, 1 = floor
     this.rooms = [];
+    this.magicWalls = new Set(); // tiles a MURUS wall or a CAVEA cage stands on right now: solid for walking and spells
     if (saved) this.restore(saved); else this.generate();
   }
 
@@ -78,15 +79,17 @@ export class Dungeon {
   solid(x, y) {
     const i = Math.floor(x), j = Math.floor(y);
     if (i < 0 || j < 0 || i >= this.w || j >= this.h) return true;
-    return !WALKABLE.has(this.tiles[j * this.w + i]);
+    return !WALKABLE.has(this.tiles[j * this.w + i]) || this.magicWalls.has(j * this.w + i);
   }
   /** Does this spot stop a flying spell? Like solid(), except spells pass over low fences and the fountain. */
   airSolid(x, y) {
     const i = Math.floor(x), j = Math.floor(y);
     if (i < 0 || j < 0 || i >= this.w || j >= this.h) return true;
-    return !AIRWAY.has(this.tiles[j * this.w + i]);
+    return !AIRWAY.has(this.tiles[j * this.w + i]) || this.magicWalls.has(j * this.w + i);
   }
   /** Would a circle of radius r at (x, y) overlap a wall? */
+  /** A plain floor tile that walls could stand on (not stairs, doors or a raised block). */
+  open(i, j) { return i > 0 && j > 0 && i < this.w - 1 && j < this.h - 1 && [TILE.FLOOR, TILE.GRASS, TILE.PATH].includes(this.tiles[j * this.w + i]) && !this.stairsAt(i + 0.5, j + 0.5) && !this.magicWalls.has(j * this.w + i); }
   blocked(x, y, r) { return this.solid(x - r, y - r) || this.solid(x + r, y - r) || this.solid(x - r, y + r) || this.solid(x + r, y + r); }
   /** Clear line of sight between two points? (You can see, and cast, over low fences.) */
   los(ax, ay, bx, by) {
@@ -118,6 +121,7 @@ export class Dungeon {
     const sx = Math.floor(ax), sy = Math.floor(ay), gx = Math.floor(bx), gy = Math.floor(by);
     const start = sy * this.w + sx, goal = gy * this.w + gx;
     if (start === goal) return [];
+    const air = (n) => AIRWAY.has(this.tiles[n]) && !this.magicWalls.has(n);
     const prev = new Int32Array(this.w * this.h).fill(-1), depth = new Uint8Array(this.w * this.h);
     prev[start] = start; const q = [start];
     for (let qi = 0; qi < q.length; qi++) {
@@ -128,8 +132,8 @@ export class Dungeon {
         const nx = cx + ox, ny = cy + oy;
         if (nx < 0 || ny < 0 || nx >= this.w || ny >= this.h) continue;
         const n = ny * this.w + nx;
-        if (prev[n] !== -1 || !AIRWAY.has(this.tiles[n])) continue;
-        if (ox && oy && (!AIRWAY.has(this.tiles[cy * this.w + nx]) || !AIRWAY.has(this.tiles[ny * this.w + cx]))) continue;
+        if (prev[n] !== -1 || !air(n)) continue;
+        if (ox && oy && (!air(cy * this.w + nx) || !air(ny * this.w + cx))) continue;
         prev[n] = c; depth[n] = depth[c] + 1; q.push(n);
       }
     }

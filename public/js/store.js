@@ -30,6 +30,7 @@ export class StoreMenu {
     this.data = null;       // the server's last 'store' message: { kind, name, rows | items, size }
     this.tab = null;
     this.pick = null;       // the row being looked at, waiting for y
+    this.page = 0;          // lists longer than a to z (a big house) are shown 26 rows at a time
     el.addEventListener('click', (e) => {
       const b = e.target.closest('[data-k]');
       if (!b || !this.isOpen) return;
@@ -37,6 +38,7 @@ export class StoreMenu {
       const k = b.dataset.k;
       if (k === 'close') this.close();
       else if (k.startsWith('tab:')) this.setTab(k.slice(4));
+      else if (k.startsWith('page:')) this.setPage(this.page + +k.slice(5));
       else this.handleKey({ key: k });
     });
   }
@@ -57,7 +59,11 @@ export class StoreMenu {
     this.el.hidden = true; this.el.innerHTML = ''; this.lastHtml = '';
     this.inventory.lastHtml = null;
   }
-  setTab(id) { this.tab = id; this.pick = null; this.render(); }
+  setTab(id) { this.tab = id; this.pick = null; this.page = 0; this.render(); }
+  get pages() { return Math.max(1, Math.ceil(this.rows().length / 26)); }
+  setPage(p) { this.page = Math.max(0, Math.min(this.pages - 1, p)); this.pick = null; this.render(); }
+  /** The rows on the current page (a to z). */
+  pageRows() { const all = this.rows(); this.page = Math.min(this.page, this.pages - 1); return all.slice(this.page * 26, this.page * 26 + 26); }
 
   /** The rows of the current tab: { it, price?, act, arg, note?, used? }. */
   rows() {
@@ -81,8 +87,10 @@ export class StoreMenu {
     if (k === 'Tab' || k === '/' || k === 'ArrowRight') { this.setTab(tabs[(at + 1) % tabs.length].id); return true; }
     if (k === 'ArrowLeft') { this.setTab(tabs[(at + tabs.length - 1) % tabs.length].id); return true; }
     if (/^[1-4]$/.test(k) && tabs[+k - 1]) { this.setTab(tabs[+k - 1].id); return true; }
+    if (k === 'PageDown' || k === ']' || k === 'ArrowDown') { this.setPage(this.page + 1); return true; }
+    if (k === 'PageUp' || k === '[' || k === 'ArrowUp') { this.setPage(this.page - 1); return true; }
     if (/^[a-z]$/.test(k)) {
-      const row = this.rows()[k.charCodeAt(0) - 97];
+      const row = this.pageRows()[k.charCodeAt(0) - 97];
       if (row) { this.pick = row; this.render(); }
     }
     return true; // swallow everything else while the store is open
@@ -111,15 +119,16 @@ export class StoreMenu {
       : `<div class="mh">${escapeHtml(d.name)} <span class="dim">·</span> ${gold}</div>`;
     if (this.pick) return this.setHtml(head + this.pickHtml(this.pick), force);
     const tabs = `<div class="tabs">${TABS[d.kind].map((t, i) => `<span class="tab${t.id === this.tab ? ' on' : ''}" data-k="tab:${t.id}">${this.touchMode ? '' : i + 1 + ' '}${t.label}</span>`).join('')}</div>`;
-    const rows = this.rows().map((r, i) => {
+    const rows = this.pageRows().map((r, i) => {
       const price = r.price !== undefined ? `<span class="price${r.act === 'buy' && me && me.gold < r.price ? ' dear' : ''}">${r.price}</span>` : '';
       return `<div class="row srow" data-k="${letter(i)}"><span><span class="mk">${letter(i)})</span> ${this.itemLabel(r.it)}${r.used ? ' <span class="dim">(sold by a caster)</span>' : ''}</span>${price}</div>`;
     });
     const empty = { take: '(your house is empty)', stash: '(your pack is empty)', sell: '(you have nothing to sell)' }[this.tab] || '(nothing here)';
     if (!rows.length) rows.push(`<div class="dim">${empty}</div>`);
     const count = d.kind === 'home' && this.tab === 'take' ? `<div class="dim">${d.items.length} / ${d.size} spaces used</div>` : '';
+    const pages = this.pages > 1 ? `<div class="pager"><span class="tab" data-k="page:-1">‹ ${this.touchMode ? '' : '[ '}prev</span> page ${this.page + 1} / ${this.pages} <span class="tab" data-k="page:1">next${this.touchMode ? '' : ' ]'} ›</span></div>` : '';
     const help = this.touchMode ? 'Tap an item' : 'letter: pick an item · Tab or 1-4: switch tab · ESC: leave';
-    this.setHtml(head + tabs + count + rows.join('') + `<div class="mf">${help}</div>`, force);
+    this.setHtml(head + tabs + count + pages + rows.join('') + `<div class="mf">${help}</div>`, force);
   }
   pickHtml(r) {
     const it = r.it, lines = [`<p>${escapeHtml(it.desc)}</p>`];
