@@ -26,7 +26,7 @@ export class Hud {
     $('roomcode').textContent = this.roomLine;
   }
   get visible() { return !$('hud').hidden; }
-  toggleCheatSheet() { $('cheat').hidden = !$('cheat').hidden; }
+  toggleCheatSheet() { $('side').hidden = !$('side').hidden; }
 
   // ---- banner (big centred text)
   banner(text, ms = 400) {
@@ -187,6 +187,23 @@ export class Hud {
     } else bar.style.width = '0';
   }
 
+  /**
+   * Effect spell cheat sheet under the Morse one, for Dumbledore (the test character who knows every spell):
+   * each school in a column, dimmed while a spell cools down or you lack the mana.
+   */
+  renderSpellCheat(me, grimoire) {
+    const el = $('spellcheat'), show = !!me && String(me.name || '').trim().toLowerCase() === 'dumbledore' && grimoire.catalog.length > 0;
+    el.hidden = !show;
+    if (!show) return;
+    const cols = ['elements', 'summons', 'control', 'utility'].map(school => {
+      const rows = grimoire.catalog.filter(sp => sp.school === school).map(sp => {
+        const off = me.cd?.[sp.id] || me.mana < sp.mana;
+        return `<div class="${off ? 'off' : 'on'}" title="${sp.desc.replace(/"/g, '&quot;')}">${sp.word}<i>${sp.mana}</i></div>`;
+      }).join('');
+      return `<div class="col sc-${school}"><div class="sh">${school[0].toUpperCase() + school.slice(1)}</div>${rows}</div>`;
+    }).join('');
+    this.setHtml(el, `<div class="hd">Effect spells: ✦ ..-- then the word</div><div class="cols">${cols}</div>`);
+  }
   /** Morse cheat sheet; letters used on this floor are bright. */
   renderCheatSheet(pool) {
     $('cheat').innerHTML = '<div style="column-span:all;color:#9a8fb0;margin-bottom:4px">Morse (H to hide)</div>' +

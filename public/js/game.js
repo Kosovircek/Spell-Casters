@@ -108,8 +108,8 @@ export class Game {
     this.myId = m.id; this.roomCode = m.room;
     this.hud.show(m.room, m.duel);
     $('leave-arena').hidden = !m.duel;
-    if (m.duel) { this.cheatWasHidden = $('cheat').hidden; $('cheat').hidden = true; } // the cheat sheet would cover one end of the duel platform (H shows it)
-    else if (switching && this.cheatWasHidden !== undefined) $('cheat').hidden = this.cheatWasHidden;
+    if (m.duel) { this.cheatWasHidden = $('side').hidden; $('side').hidden = true; } // the cheat sheet would cover one end of the duel platform (H shows it)
+    else if (switching && this.cheatWasHidden !== undefined) $('side').hidden = this.cheatWasHidden;
     this.typingSent = null; // the new room has not heard what I am typing
     if (!switching) return;
     this.morse.clear();
@@ -185,6 +185,7 @@ export class Game {
     this.store.refresh();
     this.grimoire.refresh();
     this.hud.renderSpellbar(this.morse, this.me, this.grimoire);
+    this.hud.renderSpellCheat(this.me, this.grimoire);
     this.ring.refresh();
     this.announceItemsHere();
     this.hud.renderParty(state, this.myId);

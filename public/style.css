@@ -61,7 +61,8 @@ html, body { margin: 0; height: 100%; background: #0b0910; color: #e8e2f4; font-
 #morse-hold-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #4fc3f7; }
 #morse-hold-mark { position: absolute; top: -2px; bottom: -2px; width: 2px; left: 50%; background: #ffd54f; }
 #morse-hint { font-size: 12px; color: #9a8fb0; }
-#cheat { position: absolute; right: 12px; top: 70px; background: #0b0910c8; padding: 8px 10px; font-size: 13px; columns: 2; column-gap: 16px; line-height: 1.45; }
+#side { position: absolute; right: 12px; top: 70px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-height: calc(100vh - 80px); }
+#cheat { background: #0b0910c8; padding: 8px 10px; font-size: 13px; columns: 2; column-gap: 16px; line-height: 1.45; }
 #cheat .k { color: #ffd54f; display: inline-block; width: 14px; }
 #cheat .on { color: #fff; }
 #cheat .off { color: #5d536f; }
@@ -119,7 +120,8 @@ body.touch .touch-only { display: block; }
   body.touch .pl .stats { font-size: 10px; }
   body.touch .bar { width: 110px; }
   body.touch #info { right: 6px; top: 6px; padding: 3px 8px; font-size: 12px; }
-  body.touch #cheat { right: 6px; top: 46px; font-size: 10px; padding: 4px 6px; line-height: 1.3; }
+  body.touch #side { right: 6px; top: 46px; }
+  body.touch #cheat { font-size: 10px; padding: 4px 6px; line-height: 1.3; }
   body.touch #morse { bottom: 6px; padding: 3px 10px; min-width: 220px; }
   body.touch #morse-buf { font-size: 20px; min-height: 26px; }
   body.touch #morse-hint { font-size: 10px; }
@@ -229,3 +231,12 @@ body.touch #menu p { font-size: 13px; }
   body.touch #grimoire .row { min-height: 38px; align-items: center; }
   body.touch #grimoire .tab { padding: 8px 0; }
 }
+#side[hidden], #spellcheat[hidden] { display: none; }
+#spellcheat { background: #0b0910c8; padding: 6px 10px; font-size: 11px; line-height: 1.35; overflow-y: auto; }
+#spellcheat .hd { color: #9a8fb0; margin-bottom: 3px; }
+#spellcheat .cols { display: flex; gap: 10px; }
+#spellcheat .sh { font-weight: bold; border-bottom: 1px solid currentColor; margin-bottom: 2px; }
+#spellcheat .col div:not(.sh) { letter-spacing: 1px; white-space: nowrap; }
+#spellcheat i { font-style: normal; color: #64b5f6; margin-left: 4px; font-size: 9px; letter-spacing: 0; }
+#spellcheat .off { opacity: 0.4; }
+body.touch #spellcheat { font-size: 9px; padding: 3px 6px; }
