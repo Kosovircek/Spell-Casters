@@ -34,7 +34,7 @@ export class Game {
     this.music = this.audio.music = new Music(this.audio, this.settings);
     this.morse = new MorseKey({
       wpm: this.settings.wpm, gapUnits: this.settings.gap,
-      onChange: () => { if (this.morse.bad) this.audio.play('bad'); this.hud.renderMorse(this.morse); },
+      onChange: () => { if (this.morse.bad) this.audio.play('bad'); this.hud.renderMorse(this.morse); this.shareTyping(); },
     });
     this.settings.onChange(s => { this.music.applyVolume(); this.morse.wpm = s.wpm; this.morse.gapUnits = s.gap; this.hud.renderMorse(this.morse); });
 
@@ -102,11 +102,23 @@ export class Game {
     $('leave-arena').hidden = !m.duel;
     if (m.duel) { this.cheatWasHidden = $('cheat').hidden; $('cheat').hidden = true; } // the cheat sheet would cover one end of the duel platform (H shows it)
     else if (switching && this.cheatWasHidden !== undefined) $('cheat').hidden = this.cheatWasHidden;
+    this.typingSent = null; // the new room has not heard what I am typing
     if (!switching) return;
     this.morse.clear();
     this.inventory.close(); this.store.close(); this.ring.close();
     this.input.lastMove = null; // the new room's caster has not been told how I walk yet
     this.input.stopWalking();
+  }
+
+  /**
+   * Tell the server what I am typing whenever it changes (every dot, dash, letter, backspace and cast), so the
+   * other casters see it above my wizard. Only changes are sent: a few tiny messages per letter.
+   */
+  shareTyping() {
+    const m = this.morse, key = m.spell + '|' + m.buf + '|' + m.isDown;
+    if (key === this.typingSent || !this.network.connected) return;
+    this.typingSent = key;
+    this.network.typing(m.spell, m.buf, m.isDown);
   }
 
   /** My own player snapshot (pack, equipment, hp...). */

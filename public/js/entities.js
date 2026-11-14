@@ -112,6 +112,42 @@ function drawLabel(r, view, d, x, y, colors) {
   drawWord(r.ctx, text, x + shake, wordY, i => at(i) < d.p ? colors.done : at(i) === d.p ? (d.wrong ? '#ef5350' : colors.next) : colors.rest);
 }
 
+/**
+ * A spell being typed, centred above a caster at (cx, y): the finished letters, then the dots and dashes of the
+ * letter in progress, then a blinking mark while the Morse key is held. Other casters' spells get a dark plate
+ * behind them so you can read them at a glance (what is the other wizard about to throw?).
+ */
+function drawTyping(r, t, cx, y, color, now, plate) {
+  const ctx = r.ctx, DOT = 2, DASH = 5, GAP = 2;
+  const marks = [...(t.b || '')].map(c => (c === '.' ? DOT : DASH));
+  if (t.k) marks.push(-1); // key held: what it will become is not known yet
+  const lettersW = t.s ? t.s.length * 6 + 1 : 0;
+  const marksW = marks.reduce((a, w) => a + (w < 0 ? 3 : w) + GAP, marks.length ? -GAP : 0);
+  const between = lettersW && marksW ? 3 : 0;
+  const total = lettersW + between + marksW;
+  const left = Math.round(cx - total / 2);
+  if (plate) {
+    ctx.globalAlpha = 0.55; ctx.fillStyle = '#0b0910';
+    ctx.fillRect(left - 3, y - 2, total + 6, 13);
+    ctx.globalAlpha = 1; ctx.fillStyle = color;
+    ctx.fillRect(left - 3, y + 11, total + 6, 1); // underline in the caster's colour: whose spell this is
+  }
+  if (t.s) drawWord(ctx, t.s, left + lettersW / 2, y, () => '#ffffff');
+  let x = left + lettersW + between;
+  const my = y + 4; // the marks sit at the middle of the letters
+  for (const w of marks) {
+    if (w < 0) { // held key: a pulsing square
+      ctx.globalAlpha = 0.5 + 0.5 * Math.sin(now / 60);
+      ctx.fillStyle = '#0b0910'; ctx.fillRect(x - 1, my - 1, 5, 4);
+      ctx.fillStyle = '#ffd54f'; ctx.fillRect(x, my, 3, 2);
+      ctx.globalAlpha = 1; x += 3 + GAP; continue;
+    }
+    ctx.fillStyle = '#0b0910'; ctx.fillRect(x - 1, my - 1, w + 2, 4);
+    ctx.fillStyle = '#ffd54f'; ctx.fillRect(x, my, w, 2);
+    x += w + GAP;
+  }
+}
+
 // ------------------------------------------------------------------ player
 
 export class Player extends Character {
@@ -129,13 +165,14 @@ export class Player extends Character {
       ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff'; ctx.fillRect(sx - 4, sy - img.height + 3, 1, 1); ctx.fillRect(sx + 3, sy - 6, 1, 1);
     }
     ctx.globalAlpha = 1;
-    const morse = view.morse;
-    if (this.id === view.myId && (morse.spell || morse.buf)) {
-      // the spell being typed floats above your own wizard
-      const txt = morse.spell + (morse.buf ? '_' : '');
-      drawWord(ctx, txt, sx, sy - img.height - 10 + Math.round(Math.sin(view.now / 150)), i => i < morse.spell.length ? '#ffffff' : d.color);
-      if (morse.spell) r.aimRing(sx, sy - 6, d.color, view.now);
-    } else if (this.id !== view.myId) r.smallText(d.name, sx, sy - img.height - 4, d.color);
+    const mine = this.id === view.myId, morse = view.morse;
+    // The spell being typed floats above the wizard: mine from my own Morse key, everyone else's from the server.
+    const typing = mine ? { s: morse.spell, b: morse.buf, k: morse.isDown } : d.dead ? null : d.ty;
+    const shown = typing && (typing.s || typing.b || typing.k);
+    const wordY = sy - img.height - 10 + Math.round(Math.sin(view.now / 150));
+    if (shown) r.onTop(() => drawTyping(r, typing, sx, wordY, d.color, view.now, !mine));
+    if (mine && morse.spell) r.aimRing(sx, sy - 6, d.color, view.now);
+    if (!mine) r.smallText(d.name, sx, shown ? wordY - 3 : sy - img.height - 4, d.color);
     if (view.duel && !d.dead) { // in a duel, HP under every caster's feet
       const w = 16, filled = Math.round(w * Math.max(0, d.hp) / d.maxHp);
       ctx.fillStyle = '#0b0910'; ctx.fillRect(sx - w / 2 - 1, sy + 3, w + 2, 4);

@@ -34,6 +34,8 @@ export class Network {
 
   // ---- typed helpers for everything the client can ask the server to do
   move(x, y) { this.send({ t: 'move', x, y }); }
+  /** What I am typing (finished letters, Morse of the next letter, key held), so the others see it above me. */
+  typing(s, b, k) { this.send({ t: 'type', s, b, k }); }
   cast(word, dx, dy) { this.send({ t: 'cast', w: word, dx, dy }); }
   command(c, args = {}) { this.send({ t: 'cmd', c, ...args }); }
   save() { this.send({ t: 'save' }); }

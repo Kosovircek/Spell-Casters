@@ -101,6 +101,7 @@ export class Player extends Actor {
     this.regenAt = 0;                   // next regen tick
     this.peltAt = 0;                    // Nemean Lion Pelt: next time it can stop a hit
     this.vanishUntil = 0;               // Ring of Gyges
+    this.typing = { s: '', b: '', k: false }; // the spell being typed: finished letters, Morse of the next one, key held
     this.pearlUsed = false;             // Pearl of the Dragon King, once per floor
     this.draupnir = 0;                  // kills counted toward Draupnir's potion
     this.trail = [];                    // Horseshoes of Sleipnir: recent footsteps
@@ -133,6 +134,14 @@ export class Player extends Actor {
   }
   /** Angband-style message for this player only. */
   tell(text) { this.send({ t: 'msg', text }); }
+  /** What this caster is typing right now, so everyone else can read it above them. Cleared when the spell is cast. */
+  setTyping(s, b, k) {
+    this.typing = {
+      s: String(s || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 12),
+      b: String(b || '').replace(/[^.-]/g, '').slice(0, 5),
+      k: !!k,
+    };
+  }
   setMoveInput(x, y) { this.mx = Math.max(-1, Math.min(1, +x || 0)); this.my = Math.max(-1, Math.min(1, +y || 0)); }
 
   // ---- stats and equipment
@@ -311,6 +320,7 @@ export class Player extends Actor {
       hurt: this.hurt > 0, respawn: this.dead ? Math.max(0, Math.ceil((this.respawnAt - now) / 1000)) : 0,
       kills: this.kills, blocks: this.blocks, hidden: this.vanishUntil > now, gold: this.gold,
       swift: this.swiftUntil > now ? Math.ceil((this.swiftUntil - now) / 1000) : 0, ward: this.ward, frozen: this.frozenUntil > now,
+      ...(this.typing.s || this.typing.b || this.typing.k ? { ty: this.typing } : {}), // left out while idle
       stats: {
         armor: st.armor, cut: Math.round((1 - armorFactor(st.armor)) * 100), speed: Math.round(this.moveSpeed / PLAYER.speed * 100),
         luck: st.luck, letters: this.maxLetters, haste: Math.round(st.haste * 100), reach: Math.round(st.reach * 100),

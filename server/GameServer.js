@@ -71,11 +71,13 @@ export class GameServer {
       if (m.t === 'goto') { // walk into the arena, or leave it for the surface
         const moved = m.to === 'arena' ? this.enterArena(ws, room, player) : m.to === 'surface' ? this.leaveArena(ws, room, player) : null;
         if (moved) ({ room, player } = moved);
+        player.setTyping(); // the client starts the new room with an empty spell
         return;
       }
       switch (m.t) {
         case 'move': player.setMoveInput(m.x, m.y); break;
-        case 'cast': room.cast(player, m.w, +m.dx, +m.dy); break;
+        case 'type': player.setTyping(m.s, m.b, m.k); break;
+        case 'cast': player.setTyping(); room.cast(player, m.w, +m.dx, +m.dy); break;
         case 'cmd': room.command(player, m); break;
         case 'save': room.saveNow(player); break;
       }
