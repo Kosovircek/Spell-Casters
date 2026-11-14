@@ -169,3 +169,63 @@ body.touch #menu p { font-size: 13px; }
 #menu .gold { color: #ffd54f; }
 #menu { max-height: calc(100vh - 140px); overflow-y: auto; }
 .pl .gold { color: #ffd54f; }
+
+/* ---------------------------------------------------------------- effect spells: mana, spell strip, grimoire */
+.manabar i { background: #1e88e5; }
+.manabar.thin { height: 5px; }
+.rune { color: #ffd54f; text-shadow: 0 0 6px #ffb300, 0 0 12px #ff6f00; margin-right: 4px; }
+.rune.big { font-size: 34px; }
+#morse-buf .rch { color: #ffe082; text-shadow: 0 0 6px #ffb30080; }
+.sc-elements { color: #ff8a65; } .sc-summons { color: #ce93d8; } .sc-control { color: #80deea; } .sc-utility { color: #aed581; }
+#spellbar { position: absolute; left: 50%; bottom: 118px; transform: translateX(-50%); display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; max-width: min(640px, calc(100vw - 32px)); pointer-events: none; }
+#spellbar:empty { display: none; }
+#spellbar .sb-mana { color: #64b5f6; font-weight: bold; background: #0b0910d0; padding: 2px 6px; }
+#spellbar .sp { background: #0b0910d8; border: 1px solid #4b3d63; padding: 2px 6px; font-size: 13px; font-weight: bold; letter-spacing: 1px; }
+#spellbar .sp i { font-style: normal; font-weight: normal; font-size: 10px; color: #9a8fb0; margin-left: 4px; letter-spacing: 0; }
+#spellbar .sp.ready { border-color: #ffd54f; }
+#spellbar .sp.cool { opacity: 0.6; }
+#spellbar .sp.low i { color: #ef5350; }
+#spellbar .sp.locked { opacity: 0.45; text-decoration: line-through; }
+#spellbar .sp.none { color: #9a8fb0; font-weight: normal; letter-spacing: 0; }
+.fx.st-root, .fx.st-slow, .fx.st-chill, .fx.st-stun { color: #80deea; background: #12303a; }
+.fx.st-silence, .fx.st-fear, .fx.st-confuse, .fx.st-corrode { color: #ef9a9a; background: #3a1616; }
+.fx.st-mirror, .fx.st-invis, .fx.st-lit, .fx.st-clone { color: #e1bee7; background: #2c1838; }
+
+#grimoire { position: absolute; left: 50%; top: 50px; transform: translateX(-50%); width: 460px; max-width: calc(100vw - 32px); max-height: calc(100vh - 80px); overflow-y: auto; background: #0b0910f4; border: 2px solid #ffd54f; box-shadow: 0 0 18px #ffb30040; padding: 10px 16px; font-size: 15px; line-height: 1.5; pointer-events: auto; }
+#grimoire .mh { color: #ffd54f; margin-bottom: 6px; }
+#grimoire .th { display: flex; align-items: center; gap: 6px; }
+#grimoire .tt { flex: 1; }
+#grimoire .tb { cursor: pointer; color: #9a8fb0; padding: 0 4px; }
+#grimoire .tabs { display: flex; gap: 4px; margin: 4px 0; }
+#grimoire .tab { flex: 1; text-align: center; padding: 3px 0; border: 1px solid #4b3d63; cursor: pointer; opacity: 0.6; }
+#grimoire .tab.on { opacity: 1; border-color: currentColor; }
+#grimoire .row { cursor: pointer; padding: 1px 4px; }
+#grimoire .row:hover { background: #241d31; }
+#grimoire .srow { display: flex; justify-content: space-between; gap: 8px; }
+#grimoire .srow .word { font-weight: bold; letter-spacing: 2px; }
+#grimoire .gi { color: #9a8fb0; font-size: 12px; white-space: nowrap; }
+#grimoire .mk { color: #4fc3f7; }
+#grimoire .dim { color: #7d7290; }
+#grimoire .need { color: #ef5350; }
+#grimoire .mf { color: #9a8fb0; font-size: 12px; margin-top: 8px; border-top: 1px dashed #4b3d63; padding-top: 6px; }
+#grimoire p { margin: 6px 0; }
+#grimoire .learned { text-align: center; margin: 8px 0; }
+#grimoire .learned .word { font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #ffd54f; text-shadow: 0 0 8px #ffb30080; }
+#grimoire .code { color: #ffd54f; letter-spacing: 2px; }
+#grimoire .pz-code { margin: 8px 0; padding: 6px 10px; background: #1a1424; border: 1px dashed #4b3d63; font-size: 20px; letter-spacing: 4px; text-align: center; color: #ffe082; word-break: break-word; }
+#grimoire .pz-code.morse { font-size: 18px; letter-spacing: 2px; }
+#grimoire .pz-answer { display: flex; gap: 6px; margin: 8px 0; }
+#grimoire .pz-answer input { flex: 1; font: inherit; font-size: 18px; letter-spacing: 3px; text-transform: uppercase; background: #1a1424; color: #e8e2f4; border: 2px solid #4b3d63; padding: 4px 8px; outline: none; }
+#grimoire .pz-answer input:focus { border-color: #ffd54f; }
+#grimoire .go { border: 2px solid #ffd54f; color: #ffd54f; padding: 4px 10px; }
+#grimoire.shake { animation: grshake 0.35s; }
+@keyframes grshake { 0%, 100% { margin-left: 0; } 20% { margin-left: -8px; } 40% { margin-left: 8px; } 60% { margin-left: -5px; } 80% { margin-left: 5px; } }
+#menu { max-height: calc(100vh - 80px); overflow-y: auto; }
+#menu .pager { margin-top: 6px; text-align: center; color: #9a8fb0; }
+#menu .pager .tab { color: #4fc3f7; padding: 0 6px; }
+@media (pointer: coarse), (max-width: 760px) {
+  body.touch #spellbar { bottom: 64px; }
+  body.touch #grimoire { top: 6px; padding: 6px 10px; font-size: 14px; max-height: calc(100vh - 20px); }
+  body.touch #grimoire .row { min-height: 38px; align-items: center; }
+  body.touch #grimoire .tab { padding: 8px 0; }
+}

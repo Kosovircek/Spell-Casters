@@ -10,7 +10,7 @@ export const SLOT_NAMES = { weapon: 'Weapon', shield: 'Shield', ring: 'Ring', ne
 
 const VERBS = {
   quaff:   { key: 'q', label: 'Quaff', prompt: 'Quaff which potion?', from: 'pack', ok: it => it.type === 'potion', none: 'You have no potions to quaff.' },
-  read:    { key: 'r', label: 'Read', prompt: 'Read which scroll?', from: 'pack', ok: it => it.type === 'scroll', none: 'You have no scrolls to read.' },
+  read:    { key: 'r', label: 'Read', prompt: 'Read which scroll or spellbook?', from: 'pack', ok: it => it.type === 'scroll' || it.type === 'book', none: 'You have no scrolls or spellbooks to read.' },
   wield:   { key: 'w', label: 'Wear/Wield', prompt: 'Wear or wield which item?', from: 'pack', ok: it => it.type === 'gear', none: 'You have nothing to wear or wield.' },
   drop:    { key: 'd', label: 'Drop', prompt: 'Drop which item?', from: 'pack', ok: () => true, none: 'You have nothing to drop.' },
   destroy: { key: 'k', label: 'Destroy', prompt: 'Destroy which item?', from: 'pack', ok: () => true, none: 'You have nothing to destroy.' },
@@ -131,6 +131,10 @@ export class InventoryMenu {
     const me = this.getMe();
     const cls = it.rarity === 'mythic' ? (/cursed/i.test(it.desc) ? 'cursed' : 'myth') : it.rarity === 'enchanted' ? 'ench' : '';
     const name = cls ? `<span class="${cls}">${escapeHtml(it.name)}</span>` : escapeHtml(it.name);
+    if (it.type === 'book') { // a spellbook: its school's colour; you can study it at any level
+      const known = this.knows?.(it.spell) ? ' <span class="dim">(known)</span>' : me && me.lv < it.lvl ? ` <span class="dim">(cast at Lv ${it.lvl})</span>` : '';
+      return `<span style="color:${it.color}">${escapeHtml(it.name)}</span>${known}`;
+    }
     const need = it.lvl && me && me.lv < it.lvl ? ` <span class="need">(needs Lv ${it.lvl})</span>` : '';
     return name + need;
   }
@@ -169,7 +173,7 @@ export class InventoryMenu {
     this.setHtml(`<div class="mh">${escapeHtml(cap(it.name))}:</div>` + verbs + `<div class="mf">ESC to go back</div>`);
   }
   renderInspect(it) {
-    const how = it.type === 'gear' ? `It is worn on the ${SLOT_NAMES[it.slot].toLowerCase()} slot.` : it.type === 'potion' ? 'Quaff it with q.' : 'Read it with r.';
+    const how = it.type === 'gear' ? `It is worn on the ${SLOT_NAMES[it.slot].toLowerCase()} slot.` : it.type === 'potion' ? 'Quaff it with q.' : it.type === 'book' ? 'Read it with r to open its puzzle. G shows your grimoire.' : 'Read it with r.';
     const body = `<p>${escapeHtml(it.desc)}</p>`;
     if (this.touchMode) { this.setHtml(this.touchHead(escapeHtml(cap(it.name)), false) + body + `<div class="row" data-k="close">OK</div>`); return; }
     this.setHtml(`<div class="mh">${escapeHtml(cap(it.name))}</div>${body}<p class="dim">${how}</p><div class="mf">(press any key)</div>`);

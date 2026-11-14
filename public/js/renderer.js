@@ -6,6 +6,7 @@ import { fenceTile, lampTile } from './art/critters.js';
 import { arenaPlatform, arenaSky, drawTwinkles } from './art/arena.js';
 import { MORSE } from './morse.js';
 import { Player, Spell, ORB_LIFT } from './entities.js';
+import { drawMagicFloor, drawMagicAir, magicWallDrawables, magicLights } from './magicfx.js';
 
 export class Renderer {
   constructor(canvas) {
@@ -46,11 +47,14 @@ export class Renderer {
     this.oy = Math.round(VIEW_H / 2 - focus.y * TS + (Math.random() - 0.5) * this.shake);
 
     const drawables = this.drawFloorAndCollectWalls(world, focus, now);
+    drawMagicFloor(this, view); // burning floors, ice, lava, portals, warnings
+    drawables.push(...magicWallDrawables(this, view));
     for (const e of world.entities.values()) drawables.push({ d: e.depth, draw: () => e.draw(this, view) });
     drawables.sort((a, b) => a.d - b.d);
     for (const d of drawables) d.draw();
 
     view.particles.draw(ctx, this.ox, this.oy);
+    drawMagicAir(this, view);   // fog, poison and storm clouds
     this.drawLighting(world, now);
     this.drawOnTop();
     if (view.hitboxes) this.drawHitboxes(world);
@@ -75,9 +79,12 @@ export class Renderer {
     ctx.fillStyle = 'rgba(120,130,220,0.06)';
     for (let k = 0; k < 4; k++) ctx.fillRect(px + 6 + k * 3, py + p.h * TS + WALL_H + k * 2, p.w * TS - 12 - k * 6, 2);
     ctx.drawImage(this.arenaImg, px, py);
-    const ents = [...world.entities.values()].sort((a, b) => a.depth - b.depth);
-    for (const e of ents) e.draw(this, view);
+    drawMagicFloor(this, view);
+    const ents = [...world.entities.values()].map(e => ({ d: e.depth, draw: () => e.draw(this, view) })).concat(magicWallDrawables(this, view));
+    ents.sort((a, b) => a.d - b.d);
+    for (const e of ents) e.draw();
     view.particles.draw(ctx, this.ox, this.oy);
+    drawMagicAir(this, view);
     this.drawOnTop();
     if (view.hitboxes) this.drawHitboxes(world);
   }
@@ -227,6 +234,7 @@ export class Renderer {
     if (world.map.up) light(world.map.up.x + 0.5, world.map.up.y + 0.5, 36, 0.7); // the way back up is always lit
     for (const door of world.map.doors || []) light(door.x + 0.5, door.y + 0.6, 50, 0.8); // lanterns by the doors
     for (const [x, y] of world.map.lamps || []) light(x + 0.5, y - 0.1, 56, 0.85);         // lamp posts
+    for (const [x, y, r, a] of magicLights(world)) light(x, y + 0.4, r, a);               // effect spells
     this.ctx.drawImage(this.dark, 0, 0);
   }
 

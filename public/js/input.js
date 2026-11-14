@@ -18,7 +18,9 @@ export class Input {
 
   onKeyDown(e) {
     const g = this.game;
+    if (e.target?.tagName === 'INPUT' && g.hud.visible && !g.settings.panelOpen) return; // typing a puzzle answer
     if (e.code === 'Escape' && g.ring?.isOpen) { g.ring.close(); e.preventDefault(); return; }
+    if (e.code === 'Escape' && g.grimoire?.isOpen) { g.grimoire.handleKey(e); e.preventDefault(); return; }
     if (e.code === 'Escape' && g.hud.visible && !g.inventory.isOpen && !g.store.isOpen) { this.toggleSettings(); e.preventDefault(); return; }
     if (!g.isPlaying()) return;
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS') { e.preventDefault(); g.network.save(); return; } // Ctrl+S saves, like Angband
@@ -27,6 +29,11 @@ export class Input {
     // and except movement keys while no menu is open.
     // The shop or house screen, when open, takes the keys the inventory would.
     const isNumpadOrMorse = e.code.startsWith('Numpad') || e.code === 'Space';
+    // G: the grimoire (every effect spell). While it is open it takes the keys the inventory would.
+    if (!isNumpadOrMorse && !e.ctrlKey && !e.metaKey && !e.altKey && (g.grimoire.isOpen || (e.key === 'G' && !g.inventory.isOpen && !g.store.isOpen))) {
+      if (g.grimoire.isOpen) g.grimoire.handleKey(e); else g.grimoire.open();
+      e.preventDefault(); this.stopWalking(); return;
+    }
     const menu = g.store.isOpen ? g.store : g.inventory;
     if (!isNumpadOrMorse && !(!menu.isOpen && MOVE_KEYS[e.code])) {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -59,6 +66,8 @@ export class Input {
     if (m.isDown) { this.game.audio.toneOff(); m.release(performance.now()); }
     const word = m.take();
     if (!word) return;
+    // a spellbook puzzle is open: the Morse you tapped is your answer, not a spell
+    if (this.game.grimoire?.puzzleOpen) { this.game.grimoire.answer(word.replace(/\*/g, '')); return; }
     const d = normalize(ux, uy);
     this.game.network.cast(word, d.x, d.y);
   }

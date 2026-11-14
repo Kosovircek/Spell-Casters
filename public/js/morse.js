@@ -5,6 +5,12 @@ export const MORSE = {
   U: '..-', V: '...-', W: '.--', X: '-..-', Y: '-.--', Z: '--..',
 };
 export const FROM_MORSE = Object.fromEntries(Object.entries(MORSE).map(([k, v]) => [v, k]));
+/**
+ * The rune ..-- is not a letter: tapped first, it turns the spell into an effect spell (✦ + word). It travels as
+ * '*' and is drawn as a glowing star. Anywhere but the start it is dropped like any other wrong code.
+ */
+export const RUNE = '*';
+export const RUNE_MORSE = '..--';
 
 export class MorseKey {
   // opts: { wpm, gapUnits, onChange() }
@@ -20,6 +26,8 @@ export class MorseKey {
   get unit() { return 1200 / this.wpm; }          // PARIS standard: dot length in ms
   get dashAt() { return this.unit * 2; }           // press longer than 2 dots = dash
   get isDown() { return this.downAt > 0; }
+  /** Is the spell being typed an effect spell (it starts with the rune)? */
+  get isRune() { return this.spell[0] === RUNE; }
 
   press(t) {
     if (this.downAt) return;
@@ -59,9 +67,10 @@ export class MorseKey {
   finish() {
     clearTimeout(this.gapTimer);
     if (!this.buf) return;
+    if (this.buf === RUNE_MORSE && !this.spell) { this.spell = RUNE; this.buf = ''; this.onChange(); return; }
     const l = FROM_MORSE[this.buf];
     if (!l) { this.fail(); return; }
-    if (this.spell.length < this.maxLen) this.spell += l;
+    if (this.spell.length < this.maxLen + (this.isRune ? 1 : 0)) this.spell += l; // the rune does not count as a letter
     this.buf = '';
     this.onChange();
   }

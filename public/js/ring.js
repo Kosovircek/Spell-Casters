@@ -20,7 +20,10 @@ const SEGMENTS = [
   { id: 'quaff', label: 'Potions', icon: () => itemSprite('pot_heal', 'potion'),
     count: g => countOf(g.me, 'potion'), run: g => g.inventory.open('pack', 'quaff') },
   { id: 'read', label: 'Scrolls', icon: () => itemSprite('scr_slow', 'scroll'),
-    count: g => countOf(g.me, 'scroll'), run: g => g.inventory.open('pack', 'read') },
+    count: g => countOf(g.me, 'scroll') + countOf(g.me, 'book'), run: g => g.inventory.open('pack', 'read') },
+  // The grimoire: effect spells; its badge shows how many you know. Read spellbooks from Pack.
+  { id: 'spells', label: 'Spells', icon: () => itemSprite('bk_spells', 'book', null, '#e040fb'),
+    count: g => g.grimoire.known.size || (g.grimoire.catalog.length ? -1 : 0), run: g => g.grimoire.open() },
   // The character sheet; its badge shows your level.
   { id: 'stats', label: 'Stats', icon: () => itemSprite('m_odin', 'gear', 'head', '#ffd54f'),
     count: g => g.me?.lv || 0, run: g => g.inventory.openSheet() },
@@ -64,6 +67,7 @@ export class RingMenu {
     if (!this.built) this.build();
     this.game.inventory.close();
     this.game.store.close();
+    this.game.grimoire.close();
     this.game.input.stopWalking();
     this.el.hidden = false;
     this.refresh();
@@ -93,7 +97,7 @@ export class RingMenu {
       const n = s.count(this.game);
       s.disabled = n === 0;
       s.node.classList.toggle('off', s.disabled);
-      s.badge.textContent = n ? String(n) : '';
+      s.badge.textContent = n > 0 ? String(n) : ''; // -1: open, but nothing to count
     }
   }
 

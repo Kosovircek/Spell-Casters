@@ -7,15 +7,19 @@
 //      │                       └─── Boss (the Bellwraith)
 //      ├── Chest
 //      ├── Critter (zoo animals, practice dummies and the wishing fountain on the surface)
-//      ├── Spell
+//      ├── Spell (letter spells, and the rune orbs of effect spells)
+//      ├── Minion (summons from effect spells; art in art/summons.js)
 //      └── FloorItem
 import { TS, prettyMorse } from './constants.js';
 import { drawWord } from './art/font.js';
 import { wizardSprite, enemySprite, chestSprite, itemSprite, wraithSprite, bellSprite } from './art/sprites.js';
 import { critterSprite } from './art/critters.js';
 import { MONSTERS, monsterSprite } from './art/monsters.js';
-import { MORSE } from './morse.js';
+import { MORSE, RUNE } from './morse.js';
+import { summonSprite, FLYING } from './art/summons.js';
 
+export const RUNE_COLOR = '#e040fb'; // the rune ..-- (an effect spell) glows violet wherever it is drawn
+const SCHOOL_COLOR = { elements: '#ff8a65', summons: '#aed581', control: '#4fc3f7', utility: '#ce93d8' };
 export const ORB_LIFT = 8;      // px a spell's orb floats above its spot on the floor; hitboxes are drawn at this height
 const SPELL_LEAD_MS = 80;       // never carry a spell further than this past its newest snapshot
 
@@ -132,7 +136,7 @@ function drawTyping(r, t, cx, y, color, now, plate) {
     ctx.globalAlpha = 1; ctx.fillStyle = color;
     ctx.fillRect(left - 3, y + 11, total + 6, 1); // underline in the caster's colour: whose spell this is
   }
-  if (t.s) drawWord(ctx, t.s, left + lettersW / 2, y, () => '#ffffff');
+  if (t.s) drawWord(ctx, t.s, left + lettersW / 2, y, (i) => (t.s[i] === RUNE ? RUNE_COLOR : t.s[0] === RUNE ? '#f3e5ff' : '#ffffff'));
   let x = left + lettersW + between;
   const my = y + 4; // the marks sit at the middle of the letters
   for (const w of marks) {
@@ -148,14 +152,56 @@ function drawTyping(r, t, cx, y, color, now, plate) {
   }
 }
 
+/**
+ * Little marks for what effect spells did to someone: vines at the feet (rooted), a snail swirl (slowed),
+ * a crossed mouth (silenced), stars (stunned), a ? (confused), green drips (corroded), a ! (afraid),
+ * a silver ring (mirror) and a twin glow (clone). x, y = feet; top = top of the sprite.
+ */
+export function drawStatus(r, view, st, x, y, top, extra = {}) {
+  if (!st || !st.length) return;
+  const ctx = r.ctx, t = view.now;
+  const has = (s) => st.includes(s);
+  if (has('root')) {
+    ctx.fillStyle = '#558b2f';
+    for (let k = -2; k <= 2; k++) { const h = 3 + ((k + 3) * 7 % 3); ctx.fillRect(x + k * 3, y - h, 1, h); ctx.fillRect(x + k * 3 + (k % 2 ? 1 : -1), y - h, 1, 1); }
+    ctx.fillStyle = '#8bc34a'; ctx.fillRect(x - 7, y - 1, 14, 1);
+  }
+  if (has('slow') || has('chill')) {
+    ctx.strokeStyle = has('chill') ? '#b3e5fc' : '#80deea'; ctx.lineWidth = 1; ctx.globalAlpha = 0.8;
+    ctx.beginPath(); ctx.ellipse(x, y - 1, 8, 3, 0, t / 400, t / 400 + 4.5); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  let iy = top - 4;
+  const icon = (ch, color) => { drawWord(ctx, ch, x + 9, iy, () => color); iy -= 9; };
+  if (has('silence')) icon('-', '#ef5350');
+  if (has('stun')) {
+    ctx.fillStyle = '#fff59d';
+    for (let k = 0; k < 3; k++) { const a = t / 250 + k * 2.1; ctx.fillRect(Math.round(x + Math.cos(a) * 7), Math.round(top + 2 + Math.sin(a) * 2), 2, 2); }
+  }
+  if (has('confuse')) icon('?', '#f48fb1');
+  if (has('fear')) icon('!', '#b39ddb');
+  if (has('corrode') && Math.random() < 0.3) view.particles.sparkle(extra.wx + (Math.random() - 0.5) * 0.5, extra.wy, '#9ccc65');
+  if (has('mirror')) {
+    ctx.strokeStyle = '#e0f7fa'; ctx.globalAlpha = 0.5 + 0.3 * Math.sin(t / 90); ctx.lineWidth = 1;
+    r.orb(x, (y + top) / 2, 9, 12); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+}
+
 // ------------------------------------------------------------------ player
 
 export class Player extends Character {
-  get light() { return { radius: this.data.dead ? 40 : 120 + Math.sin(performance.now() / 300) * 3, strength: 1 }; }
+  get light() {
+    if (this.data.dead) return { radius: 40, strength: 1 };
+    const lit = this.data.st?.includes('lit'); // LUX
+    return { radius: (lit ? 200 : 120) + Math.sin(performance.now() / 300) * 3, strength: 1 };
+  }
 
   draw(r, view) {
     const d = this.data, ctx = r.ctx, { x: sx, y: sy } = r.toScreen(this.x, this.y);
-    if (d.dead) ctx.globalAlpha = 0.35; else if (d.hidden) ctx.globalAlpha = 0.45; // Ring of Gyges
+    const mine = this.id === view.myId;
+    // UMBRA or a fog bank: my own caster shows faintly, someone else's is only a shimmer (unless my LUX shows them)
+    const veiled = d.conc && !mine && !view.seeHidden?.(this);
+    if (veiled) return this.drawShimmer(r, view, sx, sy);
+    if (d.dead) ctx.globalAlpha = 0.35; else if (d.hidden || d.conc) ctx.globalAlpha = 0.45; // Ring of Gyges
     r.shadow(sx, sy, 6);
     const frame = this.walkFrame;
     const img = wizardSprite(d.color, d.hurt && Math.floor(view.now / 60) % 2 === 0, frame);
@@ -165,7 +211,9 @@ export class Player extends Character {
       ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff'; ctx.fillRect(sx - 4, sy - img.height + 3, 1, 1); ctx.fillRect(sx + 3, sy - 6, 1, 1);
     }
     ctx.globalAlpha = 1;
-    const mine = this.id === view.myId, morse = view.morse;
+    if (!d.dead) drawStatus(r, view, d.st, sx, sy, sy - img.height, { wx: this.x, wy: this.y });
+    if (d.clone) { ctx.globalAlpha = 0.3 + 0.15 * Math.sin(view.now / 120); r.drawFacing(img, sx + 6, sy - img.height + 1, img.width, img.height, this.face); ctx.globalAlpha = 1; } // GEMINI
+    const morse = view.morse;
     // The spell being typed floats above the wizard: mine from my own Morse key, everyone else's from the server.
     const typing = mine ? { s: morse.spell, b: morse.buf, k: morse.isDown } : d.dead ? null : d.ty;
     const shown = typing && (typing.s || typing.b || typing.k);
@@ -173,12 +221,21 @@ export class Player extends Character {
     if (shown) r.onTop(() => drawTyping(r, typing, sx, wordY, d.color, view.now, !mine));
     if (mine && morse.spell) r.aimRing(sx, sy - 6, d.color, view.now);
     if (!mine) r.smallText(d.name, sx, shown ? wordY - 3 : sy - img.height - 4, d.color);
-    if (view.duel && !d.dead) { // in a duel, HP under every caster's feet
+    if (view.duel && !d.dead) { // in a duel, HP (and mana) under every caster's feet
       const w = 16, filled = Math.round(w * Math.max(0, d.hp) / d.maxHp);
-      ctx.fillStyle = '#0b0910'; ctx.fillRect(sx - w / 2 - 1, sy + 3, w + 2, 4);
+      ctx.fillStyle = '#0b0910'; ctx.fillRect(sx - w / 2 - 1, sy + 3, w + 2, d.maxMana ? 6 : 4);
       ctx.fillStyle = '#3a1d24'; ctx.fillRect(sx - w / 2, sy + 4, w, 2);
       ctx.fillStyle = d.hp / d.maxHp > 0.3 ? '#81c784' : '#ef5350'; ctx.fillRect(sx - w / 2, sy + 4, filled, 2);
+      if (d.maxMana) { ctx.fillStyle = '#1d2340'; ctx.fillRect(sx - w / 2, sy + 6, w, 2); ctx.fillStyle = '#7c4dff'; ctx.fillRect(sx - w / 2, sy + 6, Math.round(w * d.mana / d.maxMana), 2); }
     }
+  }
+  /** An invisible caster: a faint ripple in the air, nothing more. */
+  drawShimmer(r, view, sx, sy) {
+    const ctx = r.ctx, t = view.now;
+    ctx.globalAlpha = 0.12 + 0.06 * Math.sin(t / 150);
+    ctx.strokeStyle = '#e0e0ff'; ctx.lineWidth = 1;
+    r.orb(sx, sy - 8, 5 + Math.sin(t / 200), 9); ctx.stroke();
+    ctx.globalAlpha = 1;
   }
 }
 
@@ -207,6 +264,7 @@ export class Enemy extends Character {
   /** Little stars circling a stunned enemy; sparks off a burning one. */
   drawStatus(r, view, sx, top) {
     const d = this.data, ctx = r.ctx;
+    if (d.st) drawStatus(r, view, d.st.filter(s => s !== 'stun'), sx, r.toScreen(this.x, this.y).y, top, { wx: this.x, wy: this.y }); // effect spells
     if (d.stun) {
       ctx.fillStyle = '#fff59d';
       for (let k = 0; k < 3; k++) {
@@ -450,7 +508,9 @@ export class Spell extends Entity {
     this.x = this.hx = last.x + (last.x - prev.x) * f;
     this.y = this.hy = last.y + (last.y - prev.y) * f;
   }
+  get light() { return this.data.rn ? { radius: 46, strength: 0.9 } : { radius: 34, strength: 0.8 }; }
   draw(r, view) {
+    if (this.data.rn) return this.drawRune(r, view);
     const ctx = r.ctx, { x: sx, y: base } = r.toScreen(this.x, this.y), sy = base - ORB_LIFT;
     const letters = this.data.l, half = (letters.length - 1) * 3, pulse = Math.sin(view.now / 80) * 1.5;
     ctx.fillStyle = this.color;
@@ -460,6 +520,65 @@ export class Spell extends Entity {
     r.onTop(() => drawWord(ctx, letters, sx, sy - 4, () => '#fff')); // above the trail particles and the dark
     if (Math.random() < 0.5) view.particles.trail(this.x, this.y, this.color);
   }
+  /**
+   * An effect spell in flight: a spinning violet star in a halo of its school's colour, with its word above it
+   * (in a duel the other caster can read it and block it letter by letter). Hail shards are small ice splinters.
+   */
+  drawRune(r, view) {
+    const ctx = r.ctx, { x: sx, y: base } = r.toScreen(this.x, this.y), sy = base - ORB_LIFT, d = this.data, t = view.now;
+    if (d.l === RUNE) { // GRANDO's shards
+      ctx.fillStyle = '#e1f5fe'; ctx.save(); ctx.translate(sx, sy); ctx.rotate(t / 60);
+      ctx.fillRect(-3, -1, 6, 2); ctx.fillStyle = '#4fc3f7'; ctx.fillRect(-1, -1, 2, 2); ctx.restore();
+      if (Math.random() < 0.4) view.particles.trail(this.x, this.y, '#b3e5fc');
+      return;
+    }
+    const school = SCHOOL_COLOR[view.spellSchool?.(d.rn)] || RUNE_COLOR;
+    ctx.globalAlpha = 0.3; ctx.fillStyle = school; r.orb(sx, sy, 9 + Math.sin(t / 70) * 1.5, 8); ctx.fill();
+    ctx.globalAlpha = 1; ctx.fillStyle = this.color; r.orb(sx, sy, 5, 5); ctx.fill();
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(t / 140);
+    ctx.fillStyle = RUNE_COLOR; ctx.fillRect(-1, -6, 2, 12); ctx.fillRect(-6, -1, 12, 2);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(-1, -1, 2, 2); ctx.restore();
+    r.shadow(sx, sy + 8, 4);
+    r.onTop(() => drawWord(ctx, d.l, sx, sy - 16, () => '#f3e5ff'));
+    if (Math.random() < 0.7) view.particles.trail(this.x, this.y, Math.random() < 0.5 ? school : RUNE_COLOR);
+  }
+}
+
+// ------------------------------------------------------------------ summons
+
+/**
+ * A helper called by an effect spell. Drawn in its caster's colour; in a duel its name floats above it (spell it
+ * to break it). The decoy looks exactly like its caster, name and typing included.
+ */
+export class Minion extends Character {
+  get light() { const k = this.data.k; return k === 'drake' || k === 'ghost' || k === 'wisp' || k === 'totem' ? { radius: k === 'wisp' ? 20 : 40, strength: 0.7 } : null; }
+  get depth() { return this.y + (FLYING.has(this.data.k) ? 0.6 : 0); }
+  draw(r, view) {
+    const d = this.data, ctx = r.ctx, { x: sx, y: sy } = r.toScreen(this.x, this.y), t = view.now;
+    if (d.k === 'decoy') return this.drawDecoy(r, view, sx, sy);
+    const img = summonSprite(d.k, d.c, d.flash);
+    if (!img) return;
+    const fly = FLYING.has(d.k), lift = fly ? 8 + Math.round(Math.sin(t / 180 + this.id) * 2) : (this.moving ? Math.round(Math.abs(Math.sin(this.walkTime * 12))) : 0);
+    r.shadow(sx, sy, Math.max(3, Math.round(img.width / 3)));
+    if (d.k === 'ghost') ctx.globalAlpha = 0.75;
+    if (d.k === 'totem') { ctx.globalAlpha = 0.25 + 0.1 * Math.sin(t / 200); ctx.fillStyle = '#81c784'; r.orb(sx, sy, 3 * 16, 3 * 16 * 0.5); ctx.fill(); ctx.globalAlpha = 1; } // its healing ring
+    r.drawFacing(img, sx, sy - img.height + 1 - lift, img.width, img.height, d.k === 'skull' || d.k === 'totem' ? 1 : this.face);
+    ctx.globalAlpha = 1;
+    if (d.k === 'wisp' && Math.random() < 0.6) view.particles.trail(this.x, this.y + 0.3, d.c);
+    if (d.k === 'drake' && Math.random() < 0.1) view.particles.sparkle(this.x, this.y - 0.6, '#ff7043');
+    if (d.word) drawLabel(r, view, d, sx, sy - img.height - 10 - lift, { done: '#5d8a5f', next: '#ffd54f', rest: d.c });
+    else if (d.t <= 3 && d.k !== 'wisp' && Math.floor(t / 200) % 2) { ctx.fillStyle = d.c; ctx.fillRect(sx - 1, sy - img.height - 4 - lift, 2, 2); } // about to go
+  }
+  drawDecoy(r, view, sx, sy) {
+    const d = this.data, img = wizardSprite(d.c, false, this.walkFrame);
+    r.shadow(sx, sy, 6);
+    r.drawFacing(img, sx, sy - img.height + 2, img.width, img.height, this.face);
+    const shown = d.ty && (d.ty.s || d.ty.b || d.ty.k);
+    const wordY = sy - img.height - 10 + Math.round(Math.sin(view.now / 150));
+    if (shown) r.onTop(() => drawTyping(r, d.ty, sx, wordY, d.c, view.now, true));
+    if (d.pid !== view.myId) r.smallText(d.name, sx, shown ? wordY - 3 : sy - img.height - 4, d.c);
+    else r.smallText('(decoy)', sx, sy - img.height - 4, d.c);
+  }
 }
 
 // ------------------------------------------------------------------ floor item
@@ -468,6 +587,10 @@ export class FloorItem extends Entity {
   get depth() { return this.y - 0.2; }
   draw(r, view) {
     const d = this.data, ctx = r.ctx, { x: sx, y: sy } = r.toScreen(this.x, this.y);
+    if (d.h && !view.seeHidden?.(this, 2.2)) { // a hidden spellbook: a faint glint now and then, unless you are close or lit
+      if (Math.floor(view.now / 90 + this.x * 13) % 40 === 0) { ctx.fillStyle = '#e1bee7'; ctx.fillRect(sx, sy - 4, 1, 1); }
+      return;
+    }
     const img = itemSprite(d.kind, d.type, d.slot, d.color);
     const bob = Math.round(Math.sin(view.now / 300 + this.x * 3));
     r.shadow(sx, sy, 4);

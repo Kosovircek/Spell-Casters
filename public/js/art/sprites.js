@@ -107,6 +107,7 @@ export function enemySprite(type, flash, frame = 0) {
 const ITEM_ART = {
   potion: ['..KKK..', '..KwK..', '.KKwKK.', 'KcccccK', 'KcWcccK', 'KcccccK', 'KcccccK', '.KKKKK.'],
   scroll: ['.KKKKKKK.', 'KpPpppppK', '.KpppppK.', '.KpPPppK.', '.KpppppK.', 'KpppppPpK', '.KKKKKKK.'],
+  book: ['.KKKKKKK.', 'KccccccpK', 'KcyyccppK', 'KcyWyccpK', 'KccyycppK', 'KccccccpK', 'KccccccpK', '.KKKKKKK.'],
   cloak: ['..KKKK..', '.KccccK.', 'KccccccK', 'KcWccccK', 'KccccccK', 'KcccKccK', 'KKKK.KKK'],
   body: ['.KK..KK.', 'KccKKccK', 'KccccccK', '.KcWccK.', '.KccccK.', '.KccccK.', '.KKKKKK.'],
   ring: ['..KyK..', '.KyKyK.', 'KyK.KyK', 'KyK.KyK', '.KyyyK.', '..KKK..'],
@@ -126,7 +127,7 @@ const ITEM_COLORS = {
 export function itemSprite(kind, type, slot, color = null) {
   const key = 'item' + kind + type + slot + color;
   if (!spriteCache[key]) {
-    const art = type === 'potion' ? ITEM_ART.potion : type === 'scroll' ? ITEM_ART.scroll : ITEM_ART[slot] || ITEM_ART.cloak;
+    const art = type === 'potion' ? ITEM_ART.potion : type === 'scroll' ? ITEM_ART.scroll : type === 'book' ? ITEM_ART.book : ITEM_ART[slot] || ITEM_ART.cloak;
     const c = color || ITEM_COLORS[kind] || '#ffd54f';
     spriteCache[key] = sprite(art, { K: '#0b0910', c, w: '#e0e0e0', W: '#ffffff', p: '#e8d9b0', P: '#8d6e63', y: '#ffd54f', G: c });
   }
