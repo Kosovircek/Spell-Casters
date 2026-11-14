@@ -6,6 +6,7 @@
 // enemy flashes white on a hit, usually the eyes), pose (how it moves: walk, hop, float, skitter, still),
 // burst (colour of its death burst).
 import { sprite } from './canvas.js';
+import { BIOME_MONSTERS } from './biomeMonsters.js';
 
 const K = '#0b0910';
 const BONE = '#e0dccc';
@@ -849,6 +850,8 @@ export const MONSTERS = {
   },
 };
 
+Object.assign(MONSTERS, BIOME_MONSTERS); // the biome natives and bosses (art/biomeMonsters.js)
+
 const cache = {};
 /**
  * Sprite for an enemy kind. flash = hit flash (white except the `keep` colours); frame = walk-cycle frame;
@@ -856,7 +859,7 @@ const cache = {};
  */
 export function monsterSprite(type, flash, frame = 0, variant = 0) {
   const m = MONSTERS[type];
-  if (!m) return null;
+  if (!m || !m.rows) return null;
   const key = type + (flash ? 'f' : '') + frame + '/' + variant;
   if (cache[key]) return cache[key];
   let rows = m.rows.slice();

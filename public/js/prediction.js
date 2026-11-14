@@ -9,6 +9,8 @@ const RADIUS = 0.3;        // PLAYER.radius on the server
 const SNAP = 2;            // tiles: further apart than this, jump to the server position
 const DEADZONE_MOVING = 0.15, DEADZONE_STILL = 0.01; // tiles of disagreement that are left alone
 const HISTORY_MS = 1500;
+const SHALLOW = 14, ICE = 19;       // tile codes (server/Dungeon.js)
+const SHALLOW_SPEED = 0.72, ICE_GRIP = 2.4; // as in server/biomes/Environment.js
 
 export class Prediction {
   constructor(game) {
@@ -16,9 +18,10 @@ export class Prediction {
     this.pos = null;       // predicted { x, y } of my caster, or null when following the server
     this.history = [];     // [{ t, x, y }] my predicted positions, newest last
     this.fix = { x: 0, y: 0 }; // correction toward the server still to be blended in
+    this.vel = { x: 0, y: 0 }; // my speed (on ice it carries on)
   }
 
-  reset() { this.pos = null; this.history = []; this.fix = { x: 0, y: 0 }; }
+  reset() { this.pos = null; this.history = []; this.fix = { x: 0, y: 0 }; this.vel = { x: 0, y: 0 }; }
 
   /** Is the circle of my caster at (x, y) inside a wall? Same test as Dungeon.blocked on the server. */
   blocked(x, y) {
@@ -44,11 +47,17 @@ export class Prediction {
 
     // walk: x and y separately so you slide along walls, exactly like Actor.moveBy
     const flip = d.st?.includes('confuse') ? -1 : 1; // MISCEO reverses walking (the server does the same)
-    const dir = { x: this.game.input.dir.x * flip, y: this.game.input.dir.y * flip }, step = d.spd * dt;
-    if (dir.x || dir.y) {
-      const dx = dir.x * step, dy = dir.y * step;
-      if (!this.blocked(p.x + dx, p.y)) p.x += dx;
-      if (!this.blocked(p.x, p.y + dy)) p.y += dy;
+    const tile = this.game.world.tileAt(Math.floor(p.x), Math.floor(p.y));
+    const spd = d.spd * (tile === SHALLOW ? SHALLOW_SPEED : 1); // shallow water slows you (Environment.moveFactor)
+    const want = { x: this.game.input.dir.x * flip * spd, y: this.game.input.dir.y * flip * spd };
+    if (tile === ICE) { // on ice you only slowly change speed (the same rule as Player.update on the server)
+      const k = 1 - Math.exp(-ICE_GRIP * dt);
+      this.vel.x += (want.x - this.vel.x) * k; this.vel.y += (want.y - this.vel.y) * k;
+    } else this.vel = want;
+    if (this.vel.x || this.vel.y) {
+      const dx = this.vel.x * dt, dy = this.vel.y * dt;
+      if (!this.blocked(p.x + dx, p.y)) p.x += dx; else this.vel.x = 0;
+      if (!this.blocked(p.x, p.y + dy)) p.y += dy; else this.vel.y = 0;
     }
     this.history.push({ t: now, x: p.x, y: p.y });
     while (this.history.length && now - this.history[0].t > HISTORY_MS) this.history.shift();

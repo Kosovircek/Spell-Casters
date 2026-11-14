@@ -101,7 +101,7 @@ export class EventEffects {
       case 'nova': sfx('shatter'); for (let k = 0; k < 24; k++) { const a = k / 24 * Math.PI * 2; p.burst(e.x + Math.cos(a) * 2.5, e.y + Math.sin(a) * 2.5, k % 2 ? '#fff59d' : e.c, 2, 20, 0.5); } this.renderer.shake = 3; break;
       case 'beam': sfx('shatter'); line(p, e, '#fff59d', 24); line(p, e, '#ffffff', 12); this.renderer.shake = 3; break;
       case 'spike': sfx('hit'); p.burst(e.x, e.y, '#9ccc65', 14, 40, 0.5); p.text(e.x, e.y - 0.8, 'SNAP', '#dce775'); break;
-      case 'zap': sfx('shatter'); for (let k = 0; k < 8; k++) p.burst(e.x + (Math.random() - 0.5) * 0.3, e.y - k * 0.5, '#fff59d', 2, 15, 0.3); p.burst(e.x, e.y, '#ffffff', 10, 50, 0.4); break;
+      case 'zap': if (this.world?.map?.biome === 'storm') this.renderer.flash = 0.6; sfx('shatter'); for (let k = 0; k < 8; k++) p.burst(e.x + (Math.random() - 0.5) * 0.3, e.y - k * 0.5, '#fff59d', 2, 15, 0.3); p.burst(e.x, e.y, '#ffffff', 10, 50, 0.4); break;
       case 'collapse': sfx('bossdown'); p.burst(e.x, e.y, '#7c4dff', 50, 110, 0.9); p.burst(e.x, e.y, '#000000', 20, 50, 0.6); this.renderer.shake = 8; break;
       case 'crush': p.burst(e.x, e.y, '#ea80fc', 8, 25, 0.4); break;
       case 'raise': sfx('phase'); p.burst(e.x, e.y, '#8f7fc4', 20, 50, 0.6); this.renderer.shake = 3; break;
@@ -116,6 +116,36 @@ export class EventEffects {
       case 'drain': sfx('ward'); line(p, e, '#ef5350', 12); if (e.n) p.text(e.x2, e.y2, '+' + e.n, '#81c784'); break;
       case 'portalopen': sfx('stairs'); p.burst(e.x, e.y, e.c, 20, 50, 0.6); p.burst(e.x2, e.y2, e.c, 20, 50, 0.6); break;
       case 'portal': sfx('cloak'); p.burst(e.x, e.y, '#e1bee7', 10, 30, 0.4); p.burst(e.x2, e.y2, '#e1bee7', 10, 30, 0.4); break;
+      // ---- the biomes (server/biomes)
+      case 'freeze2': sfx('shield'); p.burst(e.x, e.y, '#b3e5fc', 20, 50, 0.7); break;
+      case 'burn': p.burst(e.x, e.y, '#ff7043', 16, 50, 0.6); break;
+      case 'melt': p.burst(e.x, e.y, '#80deea', 8, 30, 0.5); break;
+      case 'sprout': p.burst(e.x, e.y, '#8bc34a', 6, 25, 0.4); break;
+      case 'cut': sfx('hit'); p.burst(e.x, e.y, '#9ccc65', 10, 40, 0.5); break;
+      case 'chip2': sfx('hit'); p.burst(e.x, e.y, '#e1f5fe', 8, 35, 0.4); break;
+      case 'shatter2': sfx('shatter'); p.burst(e.x, e.y, '#e1f5fe', 24, 70, 0.7); break;
+      case 'bounce': sfx('block'); p.burst(e.x, e.y, '#e1f5fe', 6, 30, 0.3); break;
+      case 'erupt': sfx('hurt'); p.burst(e.x, e.y, '#ff7043', 24, 80, 0.8); p.burst(e.x, e.y, '#ffeb3b', 12, 60, 0.6); break;
+      case 'envhit': p.text(e.x, e.y - 1, { vent: 'BURNED', blades: 'CUT', lightning: 'ZAP', slam: 'SLAM' }[e.why] || '', '#ff8a65'); break;
+      case 'gears': sfx('block'); p.burst(e.x, e.y, '#b0bec5', 10, 40, 0.5); break;
+      case 'creak': p.burst(e.x, e.y, '#8d6e63', 4, 20, 0.4); break;
+      case 'fallaway': p.burst(e.x, e.y, '#5e35b1', 10, 30, 0.6); break;
+      case 'fall': sfx('hurt'); p.burst(e.x, e.y, '#7c4dff', 20, 50, 0.8); p.text(e.x, e.y - 1, 'FELL', '#b388ff'); break;
+      case 'gust2': sfx('cloak'); break;
+      case 'trial': sfx('bossdown'); p.burst(e.x, e.y, '#ffd54f', 40, 90, 1); p.text(e.x, e.y - 1.2, 'TRIAL', '#ffd54f'); this.renderer.shake = 4; break;
+      case 'trialwin': sfx('chest'); p.burst(e.x, e.y, '#ffd54f', 60, 110, 1.3); p.text(e.x, e.y - 1.2, 'TRIAL WON', '#fff59d'); break;
+      case 'trialfail': sfx('wrong'); p.burst(e.x, e.y, '#ef5350', 30, 60, 0.8); p.text(e.x, e.y - 1.2, 'TRIAL LOST', '#ef5350'); break;
+      case 'ignite': sfx('ecast'); p.burst(e.x, e.y - 0.6, '#ffca28', 24, 60, 0.7); break;
+      case 'snuff': sfx('cloak'); p.burst(e.x, e.y - 0.6, '#455a64', 16, 30, 0.6); break;
+      case 'dooropen': sfx('stairs'); p.burst(e.x, e.y, '#ffd54f', 40, 80, 1); p.text(e.x, e.y - 1, 'OPEN', '#ffd54f'); break;
+      case 'shrine': sfx('ward'); p.burst(e.x, e.y, e.k === 'blood' ? '#ff1744' : '#e040fb', 40, 80, 1); break;
+      case 'resist': p.burst(e.x, e.y, '#ff7043', 6, 25, 0.4); p.text(e.x, e.y - 1, 'IMMUNE', '#ffab91'); break;
+      case 'heard': p.text(e.x, e.y - 1.4, '!', '#ffca28'); break;
+      case 'dive': p.burst(e.x, e.y, '#4db6ac', 12, 30, 0.5); break;
+      case 'surface': sfx('cloak'); p.burst(e.x, e.y, '#80cbc4', 16, 40, 0.6); break;
+      case 'shock': sfx('shatter'); p.burst(e.x, e.y, '#b3e5fc', 14, 50, 0.5); p.text(e.x, e.y - 1, 'SHOCK', '#b3e5fc'); break;
+      case 'swoop': sfx('cloak'); p.burst(e.x, e.y, '#cfd8dc', 12, 50, 0.5); break;
+      case 'bblock2': sfx('wrong'); p.burst(e.x, e.y, '#b0bec5', 8, 40, 0.4); p.text(e.x, e.y - 1, e.why || 'GUARDED', '#b0bec5'); break;
       case 'learn': sfx('chest'); p.burst(e.x, e.y, '#e040fb', 40, 80, 1); p.text(e.x, e.y - 1, '*' + e.w, '#e1bee7'); break;
     }
   }

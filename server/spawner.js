@@ -4,13 +4,16 @@
 // For testing, FORCE_ENEMY=phantom,mimic puts those kinds on every floor (as well as the usual crowd) and
 // FORCE_BOSS=hydra makes that boss guard every floor.
 import { DEPTH } from './config.js';
-import { BESTIARY, eligible, pickWeighted } from './bestiary.js';
+import { BESTIARY, eligible, pickWeighted, nativesOf } from './bestiary.js';
 import { Slime, Mage, Creature, Bellwraith, WordLock } from './entities.js';
 import { SPECIALS, Gremlin } from './monsters.js';
 import { BOSS_CLASSES } from './bosses.js';
+import { NATIVES } from './biomes/natives.js';
+import { BIOME_BOSSES } from './biomes/biomeBosses.js';
+import { biomeFor, isBiomeBossFloor } from './biomes/biomes.js';
 import { rnd, pick } from './util.js';
 
-const BOSSES = { boss: Bellwraith, ...BOSS_CLASSES };
+const BOSSES = { boss: Bellwraith, ...BOSS_CLASSES, ...BIOME_BOSSES };
 const listEnv = (name) => (process.env[name] || '').split(',').map(s => s.trim().toLowerCase()).filter(t => BESTIARY[t]);
 
 /** A new enemy of this type. */
@@ -18,6 +21,7 @@ export function makeEnemy(type, x, y, word) {
   if (type === 'slime') return new Slime(x, y, word);
   if (type === 'mage') return new Mage(x, y, word);
   if (SPECIALS[type]) return new SPECIALS[type](x, y, word);
+  if (NATIVES[type]) return new NATIVES[type](x, y, word);
   return new Creature(type, x, y, word);
 }
 
@@ -27,8 +31,10 @@ export function makeEnemy(type, x, y, word) {
  */
 export function wordFor(room, type, words) {
   if (SPECIALS[type]?.makeWord) return SPECIALS[type].makeWord(room, words);
-  const d = BESTIARY[type], [chance, min, max] = d.words || [0, 1, 1];
-  const top = Math.max(min, Math.min(max, min + 1 + Math.floor((room.floor - (d.floors?.[0] || 1)) / 3)));
+  const d = BESTIARY[type], [chance, min0, max] = d.words || [0, 1, 1];
+  const shift = room.wordShift || 0; // floor modifiers: Words of Power (+1), Whispered Names (-1)
+  const min = Math.max(1, min0 + Math.min(0, shift));
+  const top = Math.max(min, Math.min(max + shift, min0 + 1 + shift + Math.floor((room.floor - (d.floors?.[0] || 1)) / 3)));
   if (min <= 1 && (top <= 1 || Math.random() >= chance)) return pick(room.pool);
   const lo = Math.max(2, min);
   const ok = words.filter(w => w.length >= lo && w.length <= top);
@@ -56,15 +62,18 @@ export function spawnEnemies(room, words) {
       if (snap) { x = Math.floor(x) + 0.5; y = Math.floor(y) + 0.5; } // a Mimic sits on a tile, like a real chest
       if (!dg.blocked(x, y, 0.32) && !dg.stairsAt(x, y)) return { x, y };
     }
-    return { x: r.cx, y: r.cy };
+    return freeTileIn(dg, r);
   };
 
-  // the rare ones first (and anything forced for testing), then the everyday crowd
+  // the rare ones first (and anything forced for testing), then the biome's natives, then the everyday crowd
+  const biome = biomeFor(floor), favor = biome?.favor || {};
   const plan = [...listEnv('FORCE_ENEMY')];
   const specials = eligible('special', floor);
-  for (let k = specialCount(floor); k > 0 && specials.length; k--) plan.push(pickWeighted(specials));
+  for (let k = specialCount(floor); k > 0 && specials.length; k--) plan.push(pickWeighted(specials, favor));
+  const natives = biome ? nativesOf(biome.id) : [];
+  for (let k = Math.round(count * 0.3); k > 0 && natives.length; k--) plan.push(pickWeighted(natives));
   const normals = eligible('normal', floor);
-  while (plan.length < count) plan.push(pickWeighted(normals));
+  while (plan.length < count) plan.push(pickWeighted(normals, favor));
 
   plan.forEach((type, n) => {
     const at = spot(n, type === 'mimic');
@@ -88,6 +97,7 @@ export function spawnEnemies(room, words) {
 export function bossFor(floor) {
   const forced = listEnv('FORCE_BOSS').find(t => BOSSES[t]);
   if (forced) return forced;
+  if (isBiomeBossFloor(floor)) return biomeFor(floor).boss; // the last floor of a biome: its own boss
   const types = Object.keys(BOSSES).filter(t => BESTIARY[t].debut <= floor);
   const debut = types.find(t => BESTIARY[t].debut === floor);
   if (debut) return debut;
@@ -112,9 +122,26 @@ export function spawnBoss(room, words) {
     names.push(left.length ? pick(left) : Array.from({ length: minLen }, () => pick(room.pool)).join(''));
   }
   names.sort((a, b) => a.length - b.length); // short name first, longest last
+  const own = BOSSES[type].makeNames?.(room, phases); // the Archivist's names are riddle answers
   let x = r.cx, y = r.cy - 1.5;
   if (dg.blocked(x, y, 0.45)) { x = r.cx; y = r.cy; }
-  room.enemies.push(new BOSSES[type](x, y, names));
+  if (dg.blocked(x, y, 0.45)) ({ x, y } = freeTileIn(dg, r));
+  room.enemies.push(new BOSSES[type](x, y, own || names));
+}
+
+/** Some free tile in a room (biomes may have flooded, frozen or overgrown most of it). */
+export function freeTileIn(dg, r) {
+  const spots = [];
+  for (let j = r.y; j < r.y + r.h; j++) for (let i = r.x; i < r.x + r.w; i++) if (!dg.blocked(i + 0.5, j + 0.5, 0.32) && !dg.stairsAt(i + 0.5, j + 0.5)) spots.push({ x: i + 0.5, y: j + 0.5 });
+  return spots.length ? pick(spots) : { x: r.cx, y: r.cy };
+}
+
+/** One extra everyday enemy of this floor's kind (the guardians of a challenge altar). */
+export function makeGuard(room, x, y, words) {
+  const biome = biomeFor(room.floor), normals = eligible('normal', room.floor);
+  const natives = biome ? nativesOf(biome.id) : [];
+  const type = natives.length && Math.random() < 0.4 ? pick(natives) : pickWeighted(normals, biome?.favor || {});
+  return makeEnemy(type, x, y, wordFor(room, type, words));
 }
 
 /** An enemy back from a save, or null for things that are made again on their own (the Echo Queen's echoes). */

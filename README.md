@@ -157,18 +157,56 @@ Each one changes how you fight it or how you spell it. A floor usually has one (
 
 ### Bosses
 
-A boss guards the stairs room of every floor. Each boss first appears on its own floor; after that, any boss the party could have met by then may guard a floor, with the newer ones a little more likely. Every boss has a name of several words (2 on floor 1, up to 4 deeper down, shown as pips on the boss bar), and the boss bar at the bottom says what to do right now. Every boss drops three items.
+A boss guards the stairs room of every floor (every third floor it is the biome's own boss, see [Biomes](#biomes)). Each boss first appears on its own floor; after that, any boss the party could have met by then may guard a floor, with the newer ones a little more likely. Every boss has a name of several words (2 on floor 1, up to 4 deeper down, shown as pips on the boss bar), and the boss bar at the bottom says what to do right now. Every boss drops three items.
 
 | Boss | First floor | How to beat it |
 | --- | --- | --- |
 | The Bellwraith | 1 | See below: a bell shield, and a name written only in Morse |
-| The Gravekeeper | 3 | Raises a ring of skeletons and cannot be touched while any of them stands. Once they are gone it is exposed for a few seconds; then it raises more. Every name finished raises a bigger batch |
-| The Lettered Hydra | 6 | Three heads, each with a short word of its own; every head that is up spits letters. Its body's name can only be spelled once all three heads are cut, and cut heads grow back (with a new word) after about 10 seconds. Finish a body name and all heads grow back with longer words |
-| The Hourglass Golem | 9 | Long names (5 letters and more) and a draining bar of sand. Finish the name before the sand runs out, or every letter of it comes back and the Golem slams the floor with a ring of letters |
-| The Echo Queen | 12 | Walks among echoes that look exactly like her, with the same name. Only the real queen throws letters, so watch who attacks. Hitting an echo shatters it into a ring of letters (new echoes come later); hitting the queen makes her and her echoes swap places |
-| The Silent King | 15 | Its name is hidden: only the first letter shows. Every one of its letters you **block** in mid-air reveals one more. It throws lots of letters, so there is plenty to block. Guessing works too |
+| The Gravekeeper | 2 | Raises a ring of skeletons and cannot be touched while any of them stands. Once they are gone it is exposed for a few seconds; then it raises more. Every name finished raises a bigger batch |
+| The Lettered Hydra | 5 | Three heads, each with a short word of its own; every head that is up spits letters. Its body's name can only be spelled once all three heads are cut, and cut heads grow back (with a new word) after about 10 seconds. Finish a body name and all heads grow back with longer words |
+| The Hourglass Golem | 8 | Long names (5 letters and more) and a draining bar of sand. Finish the name before the sand runs out, or every letter of it comes back and the Golem slams the floor with a ring of letters |
+| The Echo Queen | 11 | Walks among echoes that look exactly like her, with the same name. Only the real queen throws letters, so watch who attacks. Hitting an echo shatters it into a ring of letters (new echoes come later); hitting the queen makes her and her echoes swap places |
+| The Silent King | 14 | Its name is hidden: only the first letter shows. Every one of its letters you **block** in mid-air reveals one more. It throws lots of letters, so there is plenty to block. Guessing works too |
 
-For testing, `FORCE_ENEMY=phantom,mimic npm start` puts those kinds on every floor (on top of the usual crowd) and `FORCE_BOSS=hydra npm start` makes that boss guard every floor.
+For testing, `FORCE_ENEMY=phantom,mimic npm start` puts those kinds on every floor (on top of the usual crowd) and `FORCE_BOSS=hydra npm start` makes that boss guard every floor (biome bosses work too, e.g. `FORCE_BOSS=riftmaw`).
+
+## Biomes
+
+The dungeon is a run of ten biomes, three floors each: floors 1-3 are the Flooded Crypt, 4-6 the Volcanic Forge, and so on down to the Void Rift on floors 28-30, after which the cycle starts again (deeper, so harder). Each biome has its own tiles, palette, light and weather, its own terrain that effect spells interact with, a native enemy (about a third of a floor's enemies) and a boss that guards its third floor. Arriving on a floor tells you what is special about it. The floor line (top right) shows the biome, the floor's curse or blessing and any running trial.
+
+| Floors | Biome | Terrain and rules | Native | Boss (3rd floor) |
+| --- | --- | --- | --- | --- |
+| 1-3 | Flooded Crypt | Shallow water slows you; deep water can only be crossed where GELU freezes it into ice. FULGUR on a foe standing in water hits twice as hard and shocks every foe in the water nearby | Drowned: dives under the water (untouchable, its name shows as ~~~) and surfaces to throw | The Drowned Abbot: sinks and surfaces the same way |
+| 4-6 | Volcanic Forge | Lava rivers block the way; GELU and GRANDO cool lava into rock. Vents erupt on a steady beat (they glow first). The heat drains mana. IGNIS and lava spells are weak | Cinderling: shrugs off fire | The Forgemaster: armoured until it slams its anvil (or GELU / TARDUS cool it) |
+| 7-9 | Frozen Halls | Ice is slippery: you slide and turn slowly. Ice walls seal passages: IGNIS and LUX melt them, three letter spells chip them away. Blizzards hide enemy names unless you are close | Ice Yeti: its letters chill you | The Frost Matron: an ice shell with its own word guards her (or burn it off) |
+| 10-12 | Dark Catacombs | Pitch black: you see enemies only by their glowing names, and your own light is small. Spell a brazier's letter to light it for good; LUX lights your way | Gloom Stalker: hides its name outside the light | The Lightless One: only touchable in the light, and it snuffs braziers |
+| 13-15 | Overgrown Ruins | Vines choke corridors and grow back: any letter spell cuts one, fire burns a whole thicket. RADIX and ARANEA are much stronger | Seed Spitter: its letters plant new vines where they fall | The Thornmother: grows a ring of thorns and calls spitters |
+| 16-18 | Library of Echoes | Rune doors bar the halls: read the riddle above the door and spell its answer at it (a hint after three wrong tries). Two or three spellbooks per floor, and rare enemies drop more | Ink Wraith: its letters are blots of ink until they come close | The Archivist: its names are riddle answers |
+| 19-21 | Clockwork Vault | Pistons slam across corridors, rotors sweep rooms and blade plates snap up on a beat (hazard stripes warn first). TARDUS on or near machinery slows it | Cog Soldier: they all fire on the same tick | The Clockwork Colossus: its armour opens for a moment on every turn of its clock (TARDUS holds it open longer) |
+| 22-24 | Mirror Maze | Every wall is a mirror: spells that fly free (no target), yours and theirs, bounce off up to four times | Reflection: a copy of a caster that mirrors your steps, name written back to front | The Glass Sovereign: reflects wrong letters back at you and calls Reflections |
+| 25-27 | Storm Spire | The wind turns every few seconds and pushes letters sideways. Lightning strikes where a circle glows: step out of it. FULGUR and NIMBUS are stronger | Storm Hawk: swoops and shoves you | The Tempest: lightning and gusts |
+| 28-30 | Void Rift | Bridges over the void crumble a moment after you step on them (fall in and you lose 12% HP and climb back). Gravity wells pull letters and casters in; enemy letters that reach the middle are crushed. Portals link far rooms. CHAOS, PONDUS and IANUA are strongest | Void Eye: blinks next to you | The Rift Maw: breathes in (pulling everything) and out; a void or gravity spell chokes it |
+
+Effect spells that are strong or weak in a biome have their power scaled (`power` in `server/biomes/biomes.js`): durations, damage and areas grow or shrink with it.
+
+### Floor extras
+
+Any floor from 2 on may roll one **curse** or **blessing** (about half of them do; never a curse on a biome boss floor):
+
+| Curses | Blessings |
+| --- | --- |
+| Words of Power: enemy names a letter longer | Whispered Names: enemy names a letter shorter |
+| Restless Dead: enemies walk and throw a third faster | Golden Floor: double gold |
+| Thin Air: enemy letters hurt 40% more | Scholar's Floor: 50% more XP |
+| Rune Tide: letter spells do nothing, but effect spells are free and cool down twice as fast (only if every caster knows an attacking effect spell) | Healing Springs: after 3 quiet seconds you heal 1 HP every 2 seconds |
+| Silent Floor: enemies sleep (z z); tapping Morse makes noise that wakes those within 7 tiles | Ley Lines: mana comes back twice as fast |
+
+Some floors also have:
+
+- **A shrine.** The Blood Shrine (spell MANA at it) takes a third of your HP and fills your mana. The Shrine of Exchange (spell SWAP) makes you forget the effect spell you cast last and teaches you one you do not know (up to 4 levels above yours). Each caster can use a shrine once per visit.
+- **A challenge altar.** Spell DARE at it and guardians appear in its room. *In time*: beat them before the timer runs out. *Untouched*: beat them without anyone in the room getting hit. Winning drops three items, often a spellbook, and gold.
+
+For testing, `FORCE_BIOME=void npm start` makes every floor that biome (ids: crypt, forge, frozen, catacombs, ruins, library, clockwork, mirror, storm, void) and `FORCE_MOD=silent,golden npm start` puts those modifiers on every floor from 1 on (ids are in `server/biomes/modifiers.js`).
 
 ## The Bellwraith (boss)
 
@@ -371,6 +409,7 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `bestiary.js` | **Every enemy kind in one table**: floors, speed, shots, damage, XP, gold, word lengths |
 | `monsters.js` | The 20 rare enemies and their tricks (`Mimic`, `Phantom`, `Gremlin`...) |
 | `bosses.js` | The five newer bosses: `Gravekeeper`, `Hydra`, `HourglassGolem`, `EchoQueen` (+ `EchoImage`), `SilentKing` |
+| `biomes/` | **The biomes**: `biomes.js` (the ten biomes, which floors, natives, bosses, spell power), `terrain.js` (decorates a generated floor: water, lava, ice walls, vines, rune doors, machinery, chasms and bridges, shrines and altars, always keeping every part reachable), `Environment.js` (one per floor: hazards on their beats, weather, crumbling bridges, wells and portals, what spells do to terrain, challenges, how enemies look in a blizzard or on a silent floor), `natives.js`, `biomeBosses.js`, `props.js` (braziers, riddle doors, shrines, altars), `modifiers.js` (curses and blessings), `riddles.js` |
 | `spawner.js` | Fills a floor with enemies, picks its boss, turns saved enemies back into objects (`FORCE_ENEMY`, `FORCE_BOSS` for testing) |
 | `entities.js` | **OOP game objects**: `Entity` → `Actor` → `Player`, `Enemy` (→ `Slime`, `Mage`, `Creature`, `Boss` → `Bellwraith`); `Chest`; `Spell` (→ `PlayerSpell`, `EnemySpell`); `FloorItem`; and `WordLock` (the spell-the-word rule shared by enemies and chests) |
 | `Dungeon.js` | Tile codes, map generation with stairs down and up, plus collision, line of sight and path finding |
@@ -400,10 +439,11 @@ simulation 20 times a second and sends snapshots; the client draws them and send
 | `store.js` | `StoreMenu`: the shop and house screens on the surface (opened by walking up to their doors) |
 | `bell.js` | `BellChant`: plays the Bellwraith's bell letter in Morse (flashes and tone) |
 | `effects.js` | `EventEffects`: turns server events into sounds and particles |
+| `envfx.js` | The biomes on screen: erupting vents, machinery warnings, gravity wells, portals, biome lights, and the weather (rain and gusts, snow and blizzards, embers, lightning flashes) |
 | `particles.js` | `Particles`: sparks and floating text |
 | `audio.js` | `AudioManager`: Morse tone and sound effects |
 | `music.js` | `Music`: generative ambient music that follows `Game.danger()` |
 | `settings.js` | `Settings`: saved preferences and the Esc panel |
 | `lobby.js` | `Lobby`: name and room screen |
 | `constants.js` | Screen size, key maps, small helpers |
-| `art/` | Procedural pixel art: `canvas.js` (helpers), `font.js`, `sprites.js`, `tiles.js` (dungeon, stairs up and down, and the village's grass, paths, trees, buildings and duel arena), `arena.js` (the duel platform and starry sky), `critters.js` (zoo animals, the practice dummy, fences and lamp posts), `monsters.js` (every enemy beyond the slime and mage, and the new bosses) |
+| `art/` | Procedural pixel art: `canvas.js` (helpers), `font.js`, `sprites.js`, `tiles.js` (dungeon, stairs up and down, and the village's grass, paths, trees, buildings and duel arena), `arena.js` (the duel platform and starry sky), `critters.js` (zoo animals, the practice dummy, fences and lamp posts), `monsters.js` (every enemy beyond the slime and mage, and the new bosses), `biomes.js` (each biome's floor, wall and stairs tiles, the special tiles such as water, lava, ice, vines and bridges, and how dark each biome is), `biomeMonsters.js` (the natives and biome bosses) |

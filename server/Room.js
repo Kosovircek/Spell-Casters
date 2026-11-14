@@ -99,10 +99,10 @@ export class Room {
 
   // ------------------------------------------------------------------ floors
   /** The running Level for this floor, built from its saved part (or freshly generated) if nobody is on it yet. */
-  levelFor(floor) {
+  levelFor(floor, who = null) {
     let lv = this.live.get(floor);
     if (lv) return lv;
-    lv = new Level(this, floor, this.levels[floor]);
+    lv = new Level(this, floor, this.levels[floor], who);
     if (this.levels[floor]) delete this.levels[floor].enemies; // saved enemies only come back once, when a lobby is loaded
     this.live.set(floor, lv);
     this.maxDepth = Math.max(this.maxDepth, floor);
@@ -124,7 +124,7 @@ export class Room {
     if (from && from.floor === depth) return;
     if (from) { from.leave(pl); this.putAway(from); }
     const fresh = !this.live.has(depth);
-    const lv = this.levelFor(depth);
+    const lv = this.levelFor(depth, pl);
     lv.enter(pl, lv.arrival(how));
     if (fresh) lv.say(lv.town ? 'The surface' : `Floor ${depth}` + (lv.cleared ? ' (cleared before: new enemies roam it)' : ''), 3);
     else lv.say(`${pl.name} arrived`, 2);
@@ -146,7 +146,7 @@ export class Room {
     const saved = this.savedPlayers[pl.name.toLowerCase()];
     const buddy = [...this.players.values()].find(p => !p.dead);
     const floor = opts.fromArena ? 0 : saved && Number.isFinite(saved.floor) ? Math.max(0, saved.floor | 0) : buddy ? buddy.floor : 0;
-    const lv = this.levelFor(floor);
+    const lv = this.levelFor(floor, pl);
     pl.send({ t: 'welcome', id: pl.id, room: this.code });
     lv.enter(pl, !saved && buddy && buddy.floor === floor ? { x: buddy.x, y: buddy.y } : null);
     if (saved) { // a returning player gets their level, gear, HP and position back

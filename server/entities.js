@@ -126,6 +126,9 @@ export class Player extends Actor {
     this.draupnir = 0;                  // kills counted toward Draupnir's potion
     this.trail = [];                    // Horseshoes of Sleipnir: recent footsteps
     this.frozenUntil = 0;               // a Frost Wisp's letter froze this caster in place
+    this.vel = { x: 0, y: 0 };          // how fast I am going (on ice you keep sliding)
+    this.safe = null;                   // where I last stood on firm ground (a void bridge may give way)
+    this.noiseAt = 0;                   // when I last tapped Morse
     this.practiceStreak = 0;            // practice yard: words spelled in a row without a wrong letter
     this.practiceBest = 0;              // ...and the best streak ever (saved)
     this.pack = [];                     // inventory a) .. l)
@@ -163,6 +166,7 @@ export class Player extends Actor {
   sendGrimoire() { this.send(this.magic.message()); }
   /** What this caster is typing right now, so everyone else can read it above them. Cleared when the spell is cast. */
   setTyping(s, b, k) {
+    if (b || k) this.noiseAt = Date.now(); // tapping Morse makes noise (silent floors)
     this.typing = {
       // the rune (an effect spell) may only open the spell
       s: String(s || '').toUpperCase().replace(/[^A-Z*]/g, '').replace(/(?!^)\*/g, '').slice(0, 14),
@@ -215,6 +219,7 @@ export class Player extends Actor {
   // ---- XP and levels
   gainXp(room, amount) {
     if (this.level >= LEVELS.max) return;
+    if (room.xpMult && room.xpMult !== 1) amount = Math.round(amount * room.xpMult); // Scholar's Floor
     this.xp += amount;
     room.emit({ t: 'xp', x: this.x, y: this.y, n: amount, id: this.id });
     while (this.level < LEVELS.max && this.xp >= xpToNext(this.level)) {
@@ -262,10 +267,18 @@ export class Player extends Actor {
     let mx = this.mx, my = this.my; const m = Math.hypot(mx, my);
     if (m > 1) { mx /= m; my /= m; }
     if (this.is('confuse', now)) { mx = -mx; my = -my; } // MISCEO: walking is reversed
-    const spd = this.moveSpeed;
-    this.moveBy(room.dungeon, mx * spd * DT, my * spd * DT);
+    const env = room.env, spd = this.moveSpeed * (env ? env.moveFactor(this) : 1); // shallow water slows you
+    const want = { x: mx * spd, y: my * spd };
+    if (env && env.onIce(this)) { // on ice you only slowly change speed: you slide
+      const k = 1 - Math.exp(-env.iceGrip * DT);
+      this.vel.x += (want.x - this.vel.x) * k; this.vel.y += (want.y - this.vel.y) * k;
+    } else this.vel = want;
+    const bx = this.x, by = this.y;
+    this.moveBy(room.dungeon, this.vel.x * DT, this.vel.y * DT);
+    if (this.x === bx) this.vel.x = 0;
+    if (this.y === by) this.vel.y = 0;
     this.applyKnock(room.dungeon, now);
-    this.magic.tick(DT);
+    this.magic.tick(DT * (room.manaMult || 1));
     this.regenerate(room, now);
     if (this.has('trail') && (m > 0.1) && (!this.trail.length || now - this.trail[this.trail.length - 1].t > 150)) {
       this.trail.push({ x: this.x, y: this.y, t: now });
@@ -281,6 +294,7 @@ export class Player extends Actor {
     let every = 0, amount = 1;
     if (this.has('fleece') && quiet >= 5) every = 3;
     else if (this.has('regen')) { every = 5; amount = Math.max(1, Math.round(this.maxHp * 0.02)); }
+    else if (room.springs && quiet >= 3) every = 2; // Healing Springs
     else if (quiet >= LEVELS.regenDelay) every = LEVELS.regenEvery;
     if (!every) { this.regenAt = 0; return; }
     if (!this.regenAt) this.regenAt = now + every * 1000;
@@ -301,7 +315,7 @@ export class Player extends Actor {
     if (this.has('reflect') && Math.random() < 0.25) { room.emit({ t: 'reflect', x: this.x, y: this.y }); return false; }
     this.lastHitAt = now;
     if (this.has('pelt') && now >= this.peltAt) { this.peltAt = now + 10000; room.emit({ t: 'pelt', x: this.x, y: this.y }); return false; }
-    let dmg = spell.damage * rnd(0.75, 1.25) * armorFactor(this.stats.armor) * (1 + this.stats.hurtMult);
+    let dmg = spell.damage * rnd(0.75, 1.25) * armorFactor(this.stats.armor) * (1 + this.stats.hurtMult) * (room.hurtMult || 1);
     const moving = Math.hypot(this.mx, this.my) > 0.1;
     if ((this.has('still') && !moving) || (this.has('moving') && moving)) dmg *= 0.7;
     dmg = Math.max(1, Math.round(dmg));
@@ -493,10 +507,12 @@ export class Enemy extends Actor {
     if (this.stunUntil > now || this.is('stun', now)) return;
     // effect spells: decoys and golems draw enemies to them; slowed enemies do everything at half speed
     const targets = room.magic ? room.magic.targetsFor(this, alive, now) : alive;
-    const pace = this.is('slow', now) ? 0.5 : this.is('chill', now) ? 0.4 : 1;
+    const pace = (this.is('slow', now) ? 0.5 : this.is('chill', now) ? 0.4 : 1) * (room.foePace || 1);
+    const asleep = room.silent && !this.awake && !this.heard; // silent floors: it only wakes to noise, or a caster right next to it
     let target = null, td = Infinity;
     for (const pl of targets) {
       const d = this.distanceTo(pl);
+      if (asleep && d > 1.6) continue;
       const lure = pl.lure ? 0.6 : 1; // a taunting golem or a decoy wins over a caster at the same distance
       if (d * lure < td && pl.visibleFrom(d, now) && room.dungeon.los(this.x, this.y, pl.x, pl.y)) { td = d * lure; target = pl; }
     }
@@ -709,7 +725,12 @@ export class Spell extends Entity {
   /** Speed multiplier this tick (enemy spells slow down under Slow Time). */
   timeScale(room, now) { return this.chilled ? 0.5 : 1; } // GELU: flying over ice
   /** Hit a wall. Return true if the spell survives. */
-  onWall(room, prevX, prevY) { room.emit({ t: 'fizzle', x: this.x, y: this.y }); return false; }
+  onWall(room, prevX, prevY) {
+    const r = room.env ? room.env.wallHit(this, prevX, prevY) : null; // mirrors bounce, vines get cut, ice gets chipped
+    if (r === 'bounce') return true;
+    if (r !== 'eaten') room.emit({ t: 'fizzle', x: this.x, y: this.y });
+    return false;
+  }
 
   update(room, now) {
     const px = this.x, py = this.y, k = this.timeScale(room, now);
@@ -765,7 +786,7 @@ export class PlayerSpell extends Spell {
 
   /** A guided spell slides along the wall instead of breaking. */
   onWall(room, px, py) {
-    if (!this.target) return super.onWall(room);
+    if (!this.target) return super.onWall(room, px, py);
     this.x = px; this.y = py;
     const d = this.aim ? Math.hypot(this.aim.x - this.x, this.aim.y - this.y) : 0;
     if (d > 0.01) { this.vx = (this.aim.x - this.x) / d * this.spd; this.vy = (this.aim.y - this.y) / d * this.spd; }

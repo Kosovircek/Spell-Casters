@@ -150,7 +150,7 @@ export class Golem extends Minion {
 
 /** ARANEA: a spider that follows you and shoots webs; the foe it hits is stuck. */
 export class Spider extends Minion {
-  constructor(m, o, x, y) { super(m, o, 'spider', x, y, 20, { speed: 3, word: 2 }); }
+  constructor(m, o, x, y, power = 1) { super(m, o, 'spider', x, y, 20 * Math.max(1, power * 0.75), { speed: 3, word: 2 }); this.power = power; }
   think(now) {
     this.heel(1.3);
     if (now < this.nextAt) return;
@@ -160,7 +160,7 @@ export class Spider extends Minion {
     const m = this.magic, tx = f.x, ty = f.y;
     m.room.emit({ t: 'web', x: this.x, y: this.y, x2: tx, y2: ty });
     m.mark('web', tx, ty, 0.35, { r: 0.9 }, () => {
-      for (const g of m.foes(this.owner)) if (Math.hypot(g.x - tx, g.y - ty) < 0.9) m.status(g, 'root', m.duel ? 1200 : 2000, this.owner);
+      for (const g of m.foes(this.owner)) if (Math.hypot(g.x - tx, g.y - ty) < 0.9) m.status(g, 'root', (m.duel ? 1200 : 2000) * this.power, this.owner);
     });
   }
 }

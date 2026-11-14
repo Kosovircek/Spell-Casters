@@ -136,6 +136,7 @@ export class Magic {
     if (!this.duel && pl.level < sp.level) return fizzle(`${sp.word} needs level ${sp.level}. You know the words, but not yet the strength.`);
     if (!this.letterCast(pl)) return;
     let cost = sp.mana, again = null;
+    const tide = !!this.room.runeTide; // a Rune Tide floor: effect spells are free and cool down twice as fast
     if (sp.id === 'echo') { // ITERUM: the last effect spell again, cooldown or not
       again = g.last && SPELL_BY_ID[g.last];
       if (!again) return fizzle('ITERUM echoes nothing: cast another effect spell first.');
@@ -143,9 +144,10 @@ export class Magic {
     }
     const left = g.cooldownLeft(sp.id, now);
     if (left > 0) return fizzle(`${sp.word} is not ready yet (${Math.ceil(left / 1000)} s).`);
+    if (tide) cost = 0;
     if (g.mana < cost) return fizzle(`Not enough mana for ${sp.word}: it needs ${cost}, you have ${Math.floor(g.mana)}.`);
     g.mana -= cost;
-    g.cooldowns[sp.id] = now + sp.cd * 1000;
+    g.cooldowns[sp.id] = now + sp.cd * 1000 * (tide ? 0.5 : 1);
     const run = again || sp;
     if (!again) g.last = sp.id;
     const twin = this.useClone(pl);
@@ -159,7 +161,7 @@ export class Magic {
   run(pl, sp, dx, dy) {
     const fx = CASTS[sp.id];
     if (!fx) return pl.tell(`${sp.word} has no effect yet.`);
-    fx.cast(this, { pl, sp, dx, dy, now: Date.now(), power: 1 });
+    fx.cast(this, { pl, sp, dx, dy, now: Date.now(), power: this.room.spellPower ? this.room.spellPower(sp.id) : 1 }); // biomes weaken or strengthen some spells
   }
 
   // ------------------------------------------------------------------ the pieces effects are made of
@@ -171,10 +173,11 @@ export class Magic {
   }
   /** An orb came down: at a foe it touched, or where it stopped. */
   landed(o, x, y, foe) {
-    const fx = CASTS[o.rune], c = { ...o.cast, power: o.power };
+    const fx = CASTS[o.rune], c = { ...o.cast, power: o.power * (o.cast.power || 1) };
     this.room.emit({ t: 'rland', x, y, s: o.cast.sp.school, k: o.rune });
     if (o.onLand) o.onLand(x, y, foe, c);
     else if (fx?.land) fx.land(this, c, x, y, foe);
+    this.room.env?.onLand(o.rune, x, y); // GRANDO cools lava, TARDUS slows machinery
   }
   /**
    * A zone on the floor. kind picks its behaviour in tickZone; r = radius in tiles, secs = how long.
@@ -184,6 +187,7 @@ export class Magic {
     const now = Date.now();
     const z = { id: 'z' + ++lastZone, kind, x, y, r, owner, until: now + secs * 1000, nextAt: now + (opts.delay ?? 0), ...opts };
     this.zones.push(z);
+    this.room.env?.onZone(kind, x, y, r); // GELU freezes water and cools lava, fire burns vines and melts ice
     return z;
   }
   /** Something about to happen: shown at once, fires after secs. */

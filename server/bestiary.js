@@ -66,11 +66,37 @@ export const BESTIARY = {
 
   // ---------------------------------------------------------------- bosses (debut = first floor it guards)
   boss:        { name: 'The Bellwraith', kind: 'boss', debut: 1, dmg: 8, xp: 5, gold: 10 },
-  gravekeeper: { name: 'The Gravekeeper', kind: 'boss', debut: 3, dmg: 8, xp: 5.5, gold: 11 },
-  hydra:       { name: 'The Lettered Hydra', kind: 'boss', debut: 6, dmg: 8, xp: 6, gold: 12 },
-  hourglass:   { name: 'The Hourglass Golem', kind: 'boss', debut: 9, dmg: 9, xp: 6.5, gold: 13 },
-  echoqueen:   { name: 'The Echo Queen', kind: 'boss', debut: 12, dmg: 8, xp: 7, gold: 14 },
-  silentking:  { name: 'The Silent King', kind: 'boss', debut: 15, dmg: 9, xp: 8, gold: 16 },
+  gravekeeper: { name: 'The Gravekeeper', kind: 'boss', debut: 2, dmg: 8, xp: 5.5, gold: 11 },
+  hydra:       { name: 'The Lettered Hydra', kind: 'boss', debut: 5, dmg: 8, xp: 6, gold: 12 },
+  hourglass:   { name: 'The Hourglass Golem', kind: 'boss', debut: 8, dmg: 9, xp: 6.5, gold: 13 },
+  echoqueen:   { name: 'The Echo Queen', kind: 'boss', debut: 11, dmg: 8, xp: 7, gold: 14 },
+  silentking:  { name: 'The Silent King', kind: 'boss', debut: 14, dmg: 9, xp: 8, gold: 16 },
+
+  // ---------------------------------------------------------------- one native per biome (see biomes/natives.js)
+  // kind 'native': only on floors of its biome, at any depth
+  drowned:    { name: 'Drowned', kind: 'native', biome: 'crypt', weight: 4, speed: 0.9, dist: 3.5, fire: [4, 6], shot: 'two', pace: 'normal', dmg: 5, xp: 1.6, gold: 1.4, words: [0.5, 1, 4], move: 'keep' },
+  cinder:     { name: 'Cinderling', kind: 'native', biome: 'forge', weight: 4, speed: 1.3, dist: 3.5, fire: [3.5, 5.5], shot: 'fan3', pace: 'normal', dmg: 5, xp: 1.6, gold: 1.5, words: [0.5, 2, 4], move: 'erratic' },
+  yeti:       { name: 'Ice Yeti', kind: 'native', biome: 'frozen', weight: 3, speed: 1.0, dist: 2, fire: [4, 6], shot: 'two', pace: 'slow', dmg: 7, xp: 1.8, gold: 1.8, words: [0.7, 3, 5], move: 'rush' },
+  stalker:    { name: 'Gloom Stalker', kind: 'native', biome: 'catacombs', weight: 4, speed: 1.2, dist: 2.5, fire: [3.5, 5], shot: 'one', pace: 'fast', dmg: 6, xp: 2, gold: 1.8, words: [0.7, 2, 5], move: 'skitter' },
+  spitter:    { name: 'Seed Spitter', kind: 'native', biome: 'ruins', weight: 4, speed: 0, dist: 0, fire: [3.5, 5], shot: 'fan3', pace: 'slow', dmg: 5, xp: 1.6, gold: 1.5, words: [0.6, 2, 5], move: 'still' },
+  inkwraith:  { name: 'Ink Wraith', kind: 'native', biome: 'library', weight: 4, speed: 1.0, dist: 4.5, fire: [3, 4.5], shot: 'one', pace: 'normal', dmg: 6, xp: 2, gold: 2, words: [0.8, 3, 6], move: 'erratic' },
+  cogsoldier: { name: 'Cog Soldier', kind: 'native', biome: 'clockwork', weight: 4, speed: 0.7, dist: 4, fire: [99, 99], shot: 'two', pace: 'normal', dmg: 7, xp: 2, gold: 2.2, words: [0.8, 3, 6], move: 'keep' },
+  reflection: { name: 'Reflection', kind: 'native', biome: 'mirror', weight: 4, speed: 1.0, dist: 3.5, fire: [3.5, 5], shot: 'one', pace: 'normal', dmg: 7, xp: 2.2, gold: 2, words: [0.9, 3, 6], move: 'keep' },
+  stormhawk:  { name: 'Storm Hawk', kind: 'native', biome: 'storm', weight: 4, speed: 1.7, dist: 4, fire: [3, 4.5], shot: 'one', pace: 'fast', dmg: 7, xp: 2.2, gold: 2.2, words: [0.8, 3, 6], move: 'erratic' },
+  voideye:    { name: 'Void Eye', kind: 'native', biome: 'void', weight: 4, speed: 0, dist: 0, fire: [3, 4.5], shot: 'ring4', pace: 'normal', dmg: 8, xp: 2.6, gold: 2.6, words: [1, 4, 7], move: 'still' },
+
+  // ---------------------------------------------------------------- biome bosses (see biomes/biomeBosses.js)
+  // each guards the last floor of its biome's run; never picked for other floors
+  abbot:       { name: 'The Drowned Abbot', kind: 'boss', biomeBoss: true, debut: 999, dmg: 8, xp: 6, gold: 12 },
+  forgemaster: { name: 'The Forgemaster', kind: 'boss', biomeBoss: true, debut: 999, dmg: 9, xp: 6.5, gold: 13 },
+  matron:      { name: 'The Frost Matron', kind: 'boss', biomeBoss: true, debut: 999, dmg: 9, xp: 7, gold: 14 },
+  lightless:   { name: 'The Lightless One', kind: 'boss', biomeBoss: true, debut: 999, dmg: 9, xp: 7, gold: 14 },
+  thornmother: { name: 'The Thornmother', kind: 'boss', biomeBoss: true, debut: 999, dmg: 9, xp: 7.5, gold: 15 },
+  archivist:   { name: 'The Archivist', kind: 'boss', biomeBoss: true, debut: 999, dmg: 9, xp: 7.5, gold: 15 },
+  colossus:    { name: 'The Clockwork Colossus', kind: 'boss', biomeBoss: true, debut: 999, dmg: 10, xp: 8, gold: 16 },
+  sovereign:   { name: 'The Glass Sovereign', kind: 'boss', biomeBoss: true, debut: 999, dmg: 10, xp: 8, gold: 16 },
+  tempest:     { name: 'The Tempest', kind: 'boss', biomeBoss: true, debut: 999, dmg: 10, xp: 8.5, gold: 17 },
+  riftmaw:     { name: 'The Rift Maw', kind: 'boss', biomeBoss: true, debut: 999, dmg: 11, xp: 9, gold: 18 },
 };
 
 /** A few kinds only appear because something else brings them along. */
@@ -84,11 +110,14 @@ export const PACE = { slow: 0.7, normal: 1, fast: 1.45 };
 export function eligible(kind, floor) {
   return Object.entries(BESTIARY).filter(([, d]) => d.kind === kind && floor >= d.floors[0] && floor <= d.floors[1]).map(([type]) => type);
 }
+/** The natives of a biome. */
+export function nativesOf(biome) { return Object.entries(BESTIARY).filter(([, d]) => d.kind === 'native' && d.biome === biome).map(([type]) => type); }
 
-/** Pick a type, weighted. */
-export function pickWeighted(types) {
-  const total = types.reduce((a, t) => a + BESTIARY[t].weight, 0);
+/** Pick a type, weighted. favor = type -> extra weight multiplier (a biome's favourites). */
+export function pickWeighted(types, favor = {}) {
+  const w = (t) => BESTIARY[t].weight * (favor[t] || 1);
+  const total = types.reduce((a, t) => a + w(t), 0);
   let r = Math.random() * total;
-  for (const t of types) { r -= BESTIARY[t].weight; if (r <= 0) return t; }
+  for (const t of types) { r -= w(t); if (r <= 0) return t; }
   return types[types.length - 1];
 }

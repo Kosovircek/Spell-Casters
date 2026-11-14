@@ -55,13 +55,27 @@ export class Hud {
   /** Only touch the page when the HTML really changed (these panels are refreshed 20 times a second). */
   setHtml(el, html) { if (el._html !== html) { el.innerHTML = html; el._html = html; } }
 
+  /** The floor line in the dungeon: floor, biome, the floor's curses and blessings, and a running challenge. */
+  floorHtml(state, travel) {
+    const m = this.map || {}, env = state.env || {};
+    let html = escapeHtml('Floor ' + state.floor + (state.stairsOpen ? '  - stairs down open' : '  - foes left: ' + state.enemies.length) + travel);
+    if (m.biomeName) html += `<div style="color:#ffe0b2;font-size:0.85em">${escapeHtml(m.biomeName.replace(/^the /, 'The '))}</div>`;
+    const mods = (m.mods || []).map(mod => `<span title="${escapeHtml(mod.desc)}" style="color:${mod.kind === 'curse' ? '#ef9a9a' : '#a5d6a7'}">${escapeHtml(mod.name)}</span>`);
+    if (env.bliz) mods.push('<span style="color:#e1f5fe">Blizzard</span>');
+    if (mods.length) html += `<div style="font-size:0.85em">${mods.join(' · ')}</div>`;
+    if (env.ch) html += `<div style="color:#ffd54f;font-size:0.85em">Trial: ${env.ch.left} guardian${env.ch.left === 1 ? '' : 's'} left${env.ch.t ? ' · ' + env.ch.t + 's' : ''}${env.ch.k === 'nohit' ? ' · do not get hit' : ''}</div>`;
+    return html;
+  }
+
   // ---- party panel and floor info
   renderParty(state, myId) {
     const duel = state.duel;
     const travel = state.travel ? `  · carried ${state.travel.to ? 'to floor ' + state.travel.to : 'to the surface'} in ${state.travel.secs}s` : '';
-    $('floor').textContent = duel ? `Duel · round ${duel.round || '-'} · first to ${duel.need} wins · H: Morse sheet · B: hitboxes`
+    const line = duel ? `Duel · round ${duel.round || '-'} · first to ${duel.need} wins · H: Morse sheet · B: hitboxes`
       : !state.floor ? `The surface${state.maxDepth ? ` · deepest floor ${state.maxDepth}` : ' · stairs down to floor 1'}${travel}`
-      : 'Floor ' + state.floor + (state.stairsOpen ? '  - stairs down open' : '  - foes left: ' + state.enemies.length) + travel;
+      : null;
+    if (line !== null) this.setHtml($('floor'), escapeHtml(line));
+    else this.setHtml($('floor'), this.floorHtml(state, travel));
     this.setHtml($('party'), state.players.map(p =>
       `<div class="pl" style="border-color:${p.color}"><b style="color:${p.color}">${escapeHtml(p.name)}${p.id === myId ? ' (you)' : ''}</b>` +
       (duel ? '' : ` <span class="lv">Lv ${p.lv}</span>`) +

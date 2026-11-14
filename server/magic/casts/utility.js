@@ -2,11 +2,11 @@
 
 export const UTILITY = {
   mirror: {
-    cast(m, c) { c.pl.setStatus('mirror', 5000); m.room.emit({ t: 'buff', x: c.pl.x, y: c.pl.y, s: 'mirror' }); },
+    cast(m, c) { c.pl.setStatus('mirror', 5000 * c.power); m.room.emit({ t: 'buff', x: c.pl.x, y: c.pl.y, s: 'mirror' }); },
   },
   echo: { cast() {} }, // Magic.cast runs the last effect spell instead
   light: {
-    cast(m, c) { c.pl.setStatus('lit', 25000); m.room.emit({ t: 'buff', x: c.pl.x, y: c.pl.y, s: 'lit' }); },
+    cast(m, c) { c.pl.setStatus('lit', 25000 * c.power); m.room.emit({ t: 'buff', x: c.pl.x, y: c.pl.y, s: 'lit' }); },
   },
   invis: {
     cast(m, c) { c.pl.setStatus('invis', 5000); m.room.emit({ t: 'vanish', x: c.pl.x, y: c.pl.y }); },

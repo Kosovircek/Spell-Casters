@@ -154,7 +154,7 @@ export class Game {
     this.network
       .on('welcome', (m) => this.onWelcome(m))
       .on('full', (m) => alert(`That room is full (${m.max || 4} players). Try another room name.`))
-      .on('map', (m) => { this.world.setMap(m); this.prediction.reset(); this.particles.clear(); this.hud.renderCheatSheet(m.pool); this.store.close(); this.doorKind = null; })
+      .on('map', (m) => { this.world.setMap(m); this.hud.map = m; this.prediction.reset(); this.particles.clear(); this.hud.renderCheatSheet(m.pool); this.store.close(); this.doorKind = null; })
       .on('store', (m) => { if (m.kind && m.kind !== this.doorKind) return; this.store.show(m); }) // ignore it if I already walked away
       .on('state', (m) => this.onState(m))
       .on('msg', (m) => this.hud.message(m.text))

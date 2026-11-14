@@ -13,7 +13,7 @@ import { letterPool, wordsFor } from './words.js';
 import { Dungeon } from './Dungeon.js';
 import { Town } from './Town.js';
 import { Chest, PlayerSpell, FloorItem } from './entities.js';
-import { spawnEnemies, spawnBoss, enemyFromSave } from './spawner.js';
+import { spawnEnemies, spawnBoss, enemyFromSave, makeGuard } from './spawner.js';
 import { xpFor, goldFor, chestGold } from './progression.js';
 import { ItemCommands } from './ItemCommands.js';
 import { townCritters, penAnimals } from './Critters.js';
@@ -21,13 +21,18 @@ import * as Items from './items.js';
 import { Magic } from './magic/Magic.js';
 import { RUNE } from './magic/spellbook.js';
 import { bookFor } from './magic/books.js';
+import { biomeFor, isBiomeBossFloor } from './biomes/biomes.js';
+import { decorate } from './biomes/terrain.js';
+import { Environment } from './biomes/Environment.js';
+import { rollMods, modValue, MODS } from './biomes/modifiers.js';
 
 export class Level {
   /**
    * party = the Room. saved = this floor's persistent part from an earlier visit (or undefined the first time).
    * Saved enemies are only there when a lobby is loaded from disk: then the fight carries on where it was.
+   * who = the caster about to arrive (the floor's modifiers may depend on what they know).
    */
-  constructor(party, floor, saved) {
+  constructor(party, floor, saved, who = null) {
     this.party = party;
     this.floor = floor;
     this.players = new Map();  // id -> Player standing on this floor
@@ -35,6 +40,9 @@ export class Level {
     this.banner = null;        // { text, until } big centred message
     this.itemCommands = new ItemCommands(this);
     this.dungeon = this.town ? new Town() : new Dungeon(saved?.dungeon || null);
+    if (!this.town && !saved?.dungeon) decorate(this.dungeon, biomeFor(floor)); // flood it, freeze it, grow vines...
+    this.biome = biomeFor(floor);
+    this.mods = this.town ? [] : rollMods(floor, isBiomeBossFloor(floor), who ? [who] : []);
     this.chests = (saved?.chests || []).map(c => Chest.fromSave(c));
     this.items = (saved?.items || []).map(f => FloorItem.fromSave(f)).filter(Boolean);
     this.cleared = this.town || !!saved?.cleared;
@@ -45,6 +53,7 @@ export class Level {
     if (this.town) this.dungeon.bestiary = party.bestiary; // the zoo's signs count what the party has defeated
     this.critters = this.town ? townCritters(this, this.dungeon) : [];
     this.magic = new Magic(this);  // effect spells: their zones, summons, walls and portals on this floor
+    this.env = this.town ? null : new Environment(this); // the biome's ground and rules, shrines and altars
     if (!this.town && !saved) { this.spawnChests(wordsFor(this.pool)); this.hideBook(); }
     if (saved?.enemies) this.enemies = saved.enemies.map(e => enemyFromSave(e)).filter(Boolean);
     else this.spawnFoes();
@@ -59,6 +68,19 @@ export class Level {
     spawnEnemies(this, words);
     if (!this.cleared) spawnBoss(this, words);
   }
+
+  // ------------------------------------------------------------------ floor modifiers (see biomes/modifiers.js)
+  get wordShift() { return modValue(this.mods, 'wordShift', 0); }
+  get foePace() { return modValue(this.mods, 'foePace', 1); }
+  get hurtMult() { return modValue(this.mods, 'hurtMult', 1); }
+  get goldMult() { return modValue(this.mods, 'goldMult', 1); }
+  get xpMult() { return modValue(this.mods, 'xpMult', 1); }
+  get manaMult() { return modValue(this.mods, 'manaMult', 1); }
+  get springs() { return modValue(this.mods, 'springs', false); }
+  get runeTide() { return modValue(this.mods, 'runeTide', false); }
+  get silent() { return modValue(this.mods, 'silent', false); }
+  /** How strong an effect spell is on this floor (its biome may weaken or strengthen it). */
+  spellPower(id) { return this.env ? this.env.power(id) : 1; }
 
   // ------------------------------------------------------------------ the party's shared progress
   get code() { return this.party.code; }
@@ -75,7 +97,13 @@ export class Level {
   get pool() { return letterPool(Math.max(1, this.floor)); } // the town uses the floor-1 letters for practice
   get town() { return this.floor === 0; }
   get name() { return this.town ? 'the surface' : `floor ${this.floor}`; }
-  mapMessage() { return this.dungeon.toMessage(this.floor, this.pool); }
+  mapMessage() { return this.dungeon.toMessage(this.floor, this.pool, this.env ? this.env.mapExtra() : {}); }
+  /** Change a tile of this floor (ice freezing, a door opening, a vine growing) and tell everyone here. */
+  setTile(i, j, t) {
+    if (this.dungeon.tile(i, j) === t) return;
+    this.dungeon.setTile(i, j, t);
+    this.emit({ t: 'tile', n: j * this.dungeon.w + i, v: t });
+  }
 
   /** One floor's persistent part. The town's layout is fixed, so only its items are kept. */
   levelSave(withEnemies = false) {
@@ -93,7 +121,18 @@ export class Level {
     this.players.set(pl.id, pl);
     pl.floor = this.floor;
     pl.placeAt(this, at);
+    pl.safe = { x: pl.x, y: pl.y };
     pl.send(this.mapMessage());
+    this.greet(pl);
+  }
+  /** Walking into a new biome, a caster is told what is different here; and every time, the floor's modifiers. */
+  greet(pl) {
+    if (this.town) return;
+    if (this.biome && pl.lastBiome !== this.biome.id) {
+      pl.lastBiome = this.biome.id;
+      pl.tell(`You enter ${this.biome.name}. ${this.biome.intro}`);
+    }
+    for (const m of this.mods) pl.tell(`${MODS[m].kind === 'curse' ? 'A curse lies on this floor' : 'A blessing lies on this floor'}: ${MODS[m].name}. ${MODS[m].desc}`);
   }
   leave(pl) { this.players.delete(pl.id); }
 
@@ -115,7 +154,7 @@ export class Level {
       const word = chestWords.length ? pick(chestWords) : pick(this.pool) + pick(this.pool);
       let x, y, tries = 0;
       do { x = Math.floor(rnd(r.x, r.x + r.w)) + 0.5; y = Math.floor(rnd(r.y, r.y + r.h)) + 0.5; }
-      while (tries++ < 20 && ((n === 0 && Math.hypot(x - r.cx, y - r.cy) < 1.5) || dg.stairsAt(x, y)));
+      while (tries++ < 40 && ((n === 0 && Math.hypot(x - r.cx, y - r.cy) < 1.5) || dg.stairsAt(x, y) || dg.blocked(x, y, 0.3)));
       this.chests.push(new Chest(x, y, word));
     }
   }
@@ -145,15 +184,20 @@ export class Level {
 
   /** Now and then a new floor hides a spellbook in a corner of one of its rooms. LUX shows it; so does walking close. */
   hideBook() {
-    if (Math.random() > 0.45) return;
-    const dg = this.dungeon, r = pick(dg.rooms.slice(1).length ? dg.rooms.slice(1) : dg.rooms);
-    const corners = [[r.x, r.y], [r.x + r.w - 1, r.y], [r.x, r.y + r.h - 1], [r.x + r.w - 1, r.y + r.h - 1]];
-    const [i, j] = pick(corners);
-    if (dg.stairsAt(i + 0.5, j + 0.5)) return;
-    const f = new FloorItem(bookFor(this.floor + 2, this.party.foundBooks), i + 0.5, j + 0.5);
-    f.hidden = true;
-    this.items.push(f);
+    const library = this.biome?.id === 'library'; // the Library of Echoes hides two or three
+    for (let n = library ? 2 + (Math.random() < 0.5 ? 1 : 0) : 1; n > 0; n--) {
+      if (!library && Math.random() > 0.45) return;
+      const dg = this.dungeon, r = pick(dg.rooms.slice(1).length ? dg.rooms.slice(1) : dg.rooms);
+      const corners = [[r.x, r.y], [r.x + r.w - 1, r.y], [r.x, r.y + r.h - 1], [r.x + r.w - 1, r.y + r.h - 1]];
+      const [i, j] = pick(corners);
+      if (dg.stairsAt(i + 0.5, j + 0.5) || dg.blocked(i + 0.5, j + 0.5, 0.2)) continue;
+      const f = new FloorItem(bookFor(this.floor + 2, this.party.foundBooks), i + 0.5, j + 0.5);
+      f.hidden = true;
+      this.items.push(f);
+    }
   }
+  /** A guardian for a challenge altar (see Environment.startChallenge). */
+  spawnGuard(x, y) { const e = makeGuard(this, x, y, wordsFor(this.pool)); this.enemies.push(e); return e; }
   /** A spellbook dropped by a boss or a rare enemy, as deep as this floor. */
   dropBook(x, y, extra = 0) { this.dropItem(bookFor(this.floor * 2 + extra, this.party.foundBooks), x, y); }
 
@@ -165,6 +209,7 @@ export class Level {
     if (pl.dead || typeof word !== 'string') return;
     if (word[0] === RUNE) { if (/^\*[A-Z]{0,12}$/.test(word)) this.magic.cast(pl, word.slice(1), dx, dy); return; } // an effect spell
     if (!new RegExp(`^[A-Z]{1,${pl.maxLetters}}$`).test(word)) return;
+    if (this.runeTide) { pl.tell('The Rune Tide swallows letter spells here: cast effect spells (they cost no mana on this floor).'); this.emit({ t: 'rfizzle', x: pl.x, y: pl.y, id: pl.id }); return; }
     const len = Math.hypot(dx, dy); if (!len || !isFinite(len)) return;
     dx /= len; dy /= len;
     if (!this.magic.letterCast(pl)) return;
@@ -256,6 +301,7 @@ export class Level {
   /** Gold goes straight into the purse of whoever earned it. */
   giveGold(pl, n) {
     if (n <= 0) return;
+    n = Math.round(n * this.goldMult);
     pl.gold += n;
     this.emit({ t: 'gold', x: pl.x, y: pl.y, n, id: pl.id });
   }
@@ -271,6 +317,8 @@ export class Level {
     const alive = this.alivePlayers;
 
     for (const pl of this.players.values()) pl.update(this, now, alive);
+    if (this.env) this.env.tick(now);
+    if (this.silent) this.listen(now, alive);
 
     const shots = { left: Math.max(1, alive.length) + Math.min(Math.floor(this.floor / 2), DEPTH.maxExtraShots) - this.spells.filter(s => !s.fromPlayer).length };
     for (const e of this.enemies) e.update(this, now, alive, shots);
@@ -363,7 +411,9 @@ export class Level {
       if (!pl) continue;
       if (this.magic.reflect(pl, s)) continue; // AEGIS
       s.removed = true;
-      if (pl.takeHit(this, now, s) && s.source && !s.source.removed) s.source.onLetterHit(this, pl, now); // leeches, frost
+      const hurt = pl.takeHit(this, now, s);
+      if (hurt) this.env?.onCasterHurt(pl); // a no-hit challenge is lost
+      if (hurt && s.source && !s.source.removed) s.source.onLetterHit(this, pl, now); // leeches, frost
     }
   }
 
@@ -410,7 +460,7 @@ export class Level {
     this.countKill(e);
     this.giveGold(pl, goldFor(e.type, this.floor));
     if (e.isBoss) this.bossDefeated(e, pl);
-    else if (e.def.kind === 'special' && Math.random() < 0.3) this.dropBook(e.x, e.y + 0.5, 2); // rare enemies sometimes carry one
+    else if (e.def.kind === 'special' && Math.random() < (this.biome?.id === 'library' ? 0.6 : 0.3)) this.dropBook(e.x, e.y + 0.5, 2); // rare enemies sometimes carry one
     e.onDefeated(this, pl, now);
     if (pl.has('draupnir') && ++pl.draupnir % 9 === 0) {
       this.dropItem(Items.makeItem('pot_heal'), e.x, e.y);
@@ -434,6 +484,7 @@ export class Level {
   /** An item effect removes the next letter of an enemy's word (Laevateinn, Zeus, blades). */
   chip(e, pl, why) {
     if (!e || e.removed || !pl || e.guarded || e.intangible) return;
+    if (e.resists?.(why)) { this.emit({ t: 'resist', x: e.x, y: e.y }); return; } // a Cinderling in the fire
     const word = e.lock.word;
     this.emit({ t: 'chip', x: e.x, y: e.y, l: e.lock.next, why });
     const result = e.hitBy(this, { letters: e.lock.next, owner: pl });
@@ -476,6 +527,7 @@ export class Level {
     this.spells = [];
     this.slowUntil = 0;
     this.magic.reset();
+    if (!this.town) this.mods = rollMods(this.floor, isBiomeBossFloor(this.floor), [...this.players.values()]);
     this.spawnFoes();
     const at = this.arrival('wipe');
     for (const pl of this.players.values()) { pl.travel = null; pl.placeAt(this, at); }
@@ -484,21 +536,31 @@ export class Level {
     this.party.save();
   }
 
+  /** Silent floors: Morse taps are heard by sleeping enemies within 7 tiles (through walls). */
+  listen(now, alive) {
+    for (const pl of alive) {
+      if (now - (pl.noiseAt || 0) > 120) continue;
+      for (const e of this.enemies) if (!e.heard && e.distanceTo(pl) < 7) { e.heard = true; this.emit({ t: 'heard', x: e.x, y: e.y }); }
+    }
+  }
+
   broadcastState(now) {
     const here = [...this.players.values()];
+    const env = this.env;
     const base = JSON.stringify({
       t: 'state', ts: now, floor: this.floor, stairsOpen: this.stairsOpen, maxDepth: this.maxDepth,
       msg: this.banner && this.banner.until > now ? this.banner.text : null,
       slow: this.slowUntil > now ? Math.ceil((this.slowUntil - now) / 1000) : 0,
       players: here.map(p => p.snapshot(now)),
       elsewhere: this.party.elsewhere(this.floor), // teammates exploring other floors
-      enemies: this.enemies.map(e => e.snapshot()),
+      enemies: this.enemies.map(e => (env ? env.enemyView(e, e.snapshot()) : e.snapshot())),
       chests: this.chests.map(c => c.snapshot()),
       items: this.items.map(f => f.snapshot()),
       critters: this.critters.map(c => c.snapshot()),
-      projs: this.spells.map(s => s.snapshot()),
+      projs: this.spells.map(s => (env ? env.spellView(s, s.snapshot()) : s.snapshot())),
       minions: this.magic.minionSnapshot(now),
       magic: this.magic.snapshot(now),
+      env: env ? env.snapshot(now) : null,
     });
     for (const pl of here) {
       if (pl.magic.dirty) pl.sendGrimoire();

@@ -7,6 +7,8 @@ import { arenaPlatform, arenaSky, drawTwinkles } from './art/arena.js';
 import { MORSE } from './morse.js';
 import { Player, Spell, ORB_LIFT } from './entities.js';
 import { drawMagicFloor, drawMagicAir, magicWallDrawables, magicLights } from './magicfx.js';
+import { biomeTiles, specialTiles, LIGHTING, T } from './art/biomes.js';
+import { drawEnvFloor, drawWeather, envLights } from './envfx.js';
 
 export class Renderer {
   constructor(canvas) {
@@ -16,7 +18,7 @@ export class Renderer {
     this.dark = makeCanvas(VIEW_W, VIEW_H);  // darkness layer with holes cut out for lights
     this.dctx = this.dark.getContext('2d');
     this.ox = 0; this.oy = 0;                 // camera offset in pixels
-    this.shake = 0;
+    this.shake = 0; this.flash = 0;
     this.textCache = {};
     addEventListener('resize', () => this.resize());
     this.resize();
@@ -47,6 +49,7 @@ export class Renderer {
     this.oy = Math.round(VIEW_H / 2 - focus.y * TS + (Math.random() - 0.5) * this.shake);
 
     const drawables = this.drawFloorAndCollectWalls(world, focus, now);
+    drawEnvFloor(this, view);   // gravity wells, portals, warnings on machinery
     drawMagicFloor(this, view); // burning floors, ice, lava, portals, warnings
     drawables.push(...magicWallDrawables(this, view));
     for (const e of world.entities.values()) drawables.push({ d: e.depth, draw: () => e.draw(this, view) });
@@ -56,6 +59,7 @@ export class Renderer {
     view.particles.draw(ctx, this.ox, this.oy);
     drawMagicAir(this, view);   // fog, poison and storm clouds
     this.drawLighting(world, now);
+    drawWeather(this, view);    // wind, rain, snow, lightning flashes
     this.drawOnTop();
     if (view.hitboxes) this.drawHitboxes(world);
     this.drawStairsArrow(world);
@@ -137,18 +141,22 @@ export class Renderer {
    */
   drawFloorAndCollectWalls(world, focus, now) {
     const { ctx } = this, map = world.map, state = world.state, walls = [];
+    const bt = map.biome ? biomeTiles(map.biome) : null, env = world.env;
+    this.tileset = bt || TILES;
     for (let j = 0; j < map.h; j++) for (let i = 0; i < map.w; i++) {
       const sx = i * TS + this.ox, sy = j * TS + this.oy;
       if (sx < -TS || sx > VIEW_W || sy < -TS || sy > VIEW_H + WALL_H + TS) continue;
-      const t = map.tiles[j * map.w + i];
+      const n = j * map.w + i, t = map.tiles[n];
       if (t === 12) ctx.drawImage(TILES.floor[Math.floor(hash(i, j) * 4)], sx, sy); // stone under the fountain's basin
-      else if (world.walkable(i, j) && !world.doorAt(i, j)) {
+      else if (world.flat(i, j) && !world.doorAt(i, j)) {
         const down = i === map.stairs.x && j === map.stairs.y, up = map.up && i === map.up.x && j === map.up.y;
-        ctx.drawImage(down ? TILES.stairs : up ? TILES.upStairs : this.groundImage(t, i, j), sx, sy);
+        ctx.drawImage(down ? this.tileset.stairs : up ? this.tileset.upStairs : this.groundImage(t, i, j, now, n, world), sx, sy);
         if (down && state.stairsOpen) { ctx.globalAlpha = 0.35 + 0.25 * Math.sin(now / 200); ctx.fillStyle = '#ffd54f'; ctx.fillRect(sx + 2, sy + 2, 12, 12); ctx.globalAlpha = 1; }
+        if (world.envWalls.has(n)) walls.push({ d: j + 1, draw: () => ctx.drawImage(specialTiles().iron, sx, sy - WALL_H) }); // a piston or rotor bar
       } else if (map.town || this.touchesFloor(world, i, j)) {
         if (t === 4 || t === 11 || t === 13) ctx.drawImage(this.groundImage(this.groundUnder(world, i, j), i, j), sx, sy); // ground shows around trees, fences and lamps
-        walls.push({ d: j + 1, draw: () => this.drawWall(world, t, i, j, sx, sy, focus) });
+        if (t === T.VINE || t === T.RUNEDOOR) ctx.drawImage(this.tileset.floor[Math.floor(hash(i, j) * 4)], sx, sy);
+        walls.push({ d: j + 1, draw: () => this.drawWall(world, t, i, j, sx, sy, focus, now) });
       }
     }
     for (const door of map.doors || []) {
@@ -164,13 +172,29 @@ export class Renderer {
     for (const [a, b] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) { const n = world.tileAt(i + a, j + b); if (n === 1 || n === 3) return n; }
     return 2;
   }
-  groundImage(t, i, j) {
+  groundImage(t, i, j, now = 0, n = -1, world = null) {
     if (t === 2) return TILES.grass[Math.floor(hash(i, j) * 4)];
     if (t === 3) return TILES.path[Math.floor(hash(i, j) * 2)];
-    return TILES.floor[Math.floor(hash(i, j) * 4)];
+    if (t >= 14) { // biome ground
+      const sp = specialTiles(), f = Math.floor(now / 260 + hash(i, j) * 3) % 3, env = world?.env || {};
+      switch (t) {
+        case T.SHALLOW: return sp.shallow[f];
+        case T.DEEP: return sp.deep[f];
+        case T.LAVA: return sp.lava[Math.floor(now / 330 + hash(i, j) * 3) % 3];
+        case T.CHASM: return sp.chasm[Math.floor(now / 700 + hash(i, j) * 3) % 3];
+        case T.ROCK: return sp.rock[Math.floor(hash(i, j) * 2)];
+        case T.ASH: return sp.ash[Math.floor(hash(i, j) * 2)];
+        case T.ICE: return sp.ice[Math.floor(hash(i, j) * 2)];
+        case T.VENT: return sp.vent;
+        case T.SLOT: return sp.slot;
+        case T.BLADES: return env.up?.includes(n) ? sp.bladesUp : sp.blades;
+        case T.BRIDGE: return world?.envHoles.has(n) ? sp.chasm[f] : env.cr?.includes(n) ? sp.bridgeCracked : sp.bridge[Math.floor(hash(i, j) * 2)];
+      }
+    }
+    return this.tileset.floor[Math.floor(hash(i, j) * 4)];
   }
   touchesFloor(world, i, j) {
-    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if ((di || dj) && world.walkable(i + di, j + dj)) return true;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if ((di || dj) && world.flat(i + di, j + dj)) return true;
     return false;
   }
   /** Which picture a raised block uses: dungeon wall, tree, or a piece of the house, the shop or the duel arena. */
@@ -184,6 +208,9 @@ export class Renderer {
       return fenceTile((f(i, j - 1) ? 1 : 0) | (f(i + 1, j) ? 2 : 0) | (f(i, j + 1) ? 4 : 0) | (f(i - 1, j) ? 8 : 0));
     }
     if (t === 13) return this.lampImg || (this.lampImg = lampTile());
+    if (t === T.ICEWALL) return specialTiles().iceWall[Math.floor(hash(i, j) * 2)];
+    if (t === T.VINE) return specialTiles().vine[Math.floor(hash(i, j) * 3)];
+    if (t === T.RUNEDOOR) return specialTiles().runeDoor[Math.floor(performance.now() / 400) % 2];
     if (t === 9) { // sand inside, a stone rim round the edge; the front wall alternates arches and banners
       const inArena = (a, b) => { const n = world.tileAt(a, b); return n === 9 || n === 10; };
       if (inArena(i - 1, j) && inArena(i + 1, j) && inArena(i, j - 1) && inArena(i, j + 1)) return TILES.arena.sand;
@@ -191,7 +218,7 @@ export class Renderer {
       if (inArena(i, j + 1)) return r.plain; // its front is hidden behind the next row
       return i % 2 ? r.arch : r.banner;
     }
-    return TILES.wall[Math.floor(hash(j, i) * 3)];
+    return this.tileset.wall[Math.floor(hash(j, i) * 3)];
   }
   /** A raised block is WALL_H tall: its top sits up the screen and its front face covers its own square. */
   drawWall(world, t, i, j, sx, sy, focus) {
@@ -200,11 +227,11 @@ export class Renderer {
     if (nearPlayer) ctx.globalAlpha = 0.45; // see-through when it stands in front of you
     ctx.drawImage(this.blockImage(world, t, i, j), sx, sy - WALL_H);
     if (t === 0) {
-      ctx.fillStyle = '#7d7299'; const ty = sy - WALL_H; // light rim where the wall meets open floor
-      if (world.walkable(i - 1, j)) ctx.fillRect(sx, ty, 1, TS);
-      if (world.walkable(i + 1, j)) ctx.fillRect(sx + TS - 1, ty, 1, TS);
-      if (world.walkable(i, j - 1)) ctx.fillRect(sx, ty, TS, 1);
-      if (world.walkable(i, j + 1)) ctx.fillRect(sx, ty + TS - 1, TS, 1);
+      ctx.fillStyle = this.tileset.wallRim || '#7d7299'; const ty = sy - WALL_H; // light rim where the wall meets open floor
+      if (world.flat(i - 1, j)) ctx.fillRect(sx, ty, 1, TS);
+      if (world.flat(i + 1, j)) ctx.fillRect(sx + TS - 1, ty, 1, TS);
+      if (world.flat(i, j - 1)) ctx.fillRect(sx, ty, TS, 1);
+      if (world.flat(i, j + 1)) ctx.fillRect(sx, ty + TS - 1, TS, 1);
     }
     ctx.globalAlpha = 1;
   }
@@ -221,7 +248,8 @@ export class Renderer {
   drawLighting(world, now) {
     const d = this.dctx;
     d.globalCompositeOperation = 'source-over';
-    d.clearRect(0, 0, VIEW_W, VIEW_H); d.fillStyle = world.map.town ? 'rgba(10,8,30,0.45)' : 'rgba(6,4,12,0.9)'; d.fillRect(0, 0, VIEW_W, VIEW_H); // dusk on the surface
+    const lit = LIGHTING[world.map.biome] || { dark: 0.9, reach: 1 };
+    d.clearRect(0, 0, VIEW_W, VIEW_H); d.fillStyle = world.map.town ? 'rgba(10,8,30,0.45)' : `rgba(6,4,12,${lit.dark})`; d.fillRect(0, 0, VIEW_W, VIEW_H); // dusk on the surface
     d.globalCompositeOperation = 'destination-out';
     const light = (x, y, r, a) => {
       const sx = x * TS + this.ox, sy = y * TS + this.oy - 6;
@@ -229,7 +257,8 @@ export class Renderer {
       g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(0.6, `rgba(0,0,0,${a * 0.7})`); g.addColorStop(1, 'rgba(0,0,0,0)');
       d.fillStyle = g; d.fillRect(sx - r, sy - r, r * 2, r * 2);
     };
-    for (const e of world.entities.values()) { const l = e.light; if (l) light(e.x, e.y, l.radius, l.strength); }
+    for (const e of world.entities.values()) { const l = e.light; if (l) light(e.x, e.y, e instanceof Player ? l.radius * lit.reach : l.radius, l.strength); }
+    for (const [x, y, r, a] of envLights(this, world, now)) light(x, y, r, a); // lava, vents, wells, portals
     if (world.state.stairsOpen) light(world.map.stairs.x + 0.5, world.map.stairs.y + 0.5, 60, 0.9);
     if (world.map.up) light(world.map.up.x + 0.5, world.map.up.y + 0.5, 36, 0.7); // the way back up is always lit
     for (const door of world.map.doors || []) light(door.x + 0.5, door.y + 0.6, 50, 0.8); // lanterns by the doors

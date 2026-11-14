@@ -4,6 +4,7 @@
 // the spell's land() effect happens (see casts/*.js).
 import { Spell } from '../entities.js';
 import { DT, DUEL } from '../config.js';
+import { TILE } from '../Dungeon.js';
 
 export class RuneOrb extends Spell {
   /**
@@ -39,7 +40,9 @@ export class RuneOrb extends Spell {
     this.x += this.vx * DT * this.timeScale(room, now); this.y += this.vy * DT * this.timeScale(room, now);
     this.ttl -= DT;
     if (this.ttl <= 0) { this.land(px, py, null); return; }
-    if (room.dungeon.airSolid(this.x, this.y)) this.land(px, py, null);
+    if (room.dungeon.airSolid(this.x, this.y)) { this.land(px, py, null); return; }
+    // GELU and GRANDO come down on the first water or lava they fly over (so you can freeze a way across)
+    if ((this.rune === 'ice' || this.rune === 'shard') && room.env && [TILE.DEEP, TILE.LAVA].includes(room.dungeon.tileUnder(this.x, this.y))) this.land(this.x, this.y, null);
   }
   /** Curve toward the target: freely in the dungeon, only a little in a duel (so a sidestep still dodges it). */
   steer(t) {

@@ -116,6 +116,21 @@ function drawLabel(r, view, d, x, y, colors) {
   drawWord(r.ctx, text, x + shake, wordY, i => at(i) < d.p ? colors.done : at(i) === d.p ? (d.wrong ? '#ef5350' : colors.next) : colors.rest);
 }
 
+/** In the Dark Catacombs enemies are seen only by their glowing words: draw the label above the darkness. */
+const glowing = (view, d) => d.dark || view.world?.map?.biome === 'catacombs';
+function label(r, view, d, fn) { if (glowing(view, d)) r.onTop(fn); else fn(); }
+
+/** Asleep on a silent floor: little z's that drift up. */
+function drawSleep(r, view, sx, top) { r.smallText('z z', sx + 6, top - 2 + Math.round(Math.sin(view.now / 300) * 2), '#90a4ae'); }
+
+/** A riddle on a dark plate (the Archivist and the rune doors of the Library of Echoes). */
+function drawRiddle(r, q, cx, y) {
+  const ctx = r.ctx, w = Math.max(...q.map(l => l.length)) * 5 + 8;
+  ctx.globalAlpha = 0.75; ctx.fillStyle = '#1a1208'; ctx.fillRect(Math.round(cx - w / 2), y - 2, w, q.length * 9 + 3);
+  ctx.globalAlpha = 1; ctx.fillStyle = '#8d6e63'; ctx.fillRect(Math.round(cx - w / 2), y + q.length * 9 + 1, w, 1);
+  q.forEach((l, i) => r.smallText(l, cx, y + 8 + i * 9, '#ffe0b2'));
+}
+
 /**
  * A spell being typed, centred above a caster at (cx, y): the finished letters, then the dots and dashes of the
  * letter in progress, then a blinking mark while the Morse key is held. Other casters' spells get a dark plate
@@ -258,7 +273,8 @@ export class Enemy extends Character {
     const { img, w, h, bob } = this.pose(view);
     r.drawFacing(img, sx, sy - h + 2 - bob, w, h, this.face);
     const ly = sy - img.height - 10 - bob + (d.wrong ? Math.round(Math.sin(view.now / 20)) : 0);
-    drawLabel(r, view, d, sx, ly, this.labelColors);
+    label(r, view, d, () => drawLabel(r, view, d, sx, ly, this.labelColors));
+    if (d.zz) drawSleep(r, view, sx, sy - h - bob);
     this.drawStatus(r, view, sx, sy - h - bob);
   }
   /** Little stars circling a stunned enemy; sparks off a burning one. */
@@ -309,7 +325,9 @@ export class Creature extends Enemy {
   get variant() { return this.data.heads ? this.data.heads.reduce((m, h, i) => m | (h.up ? 1 << i : 0), 0) : 0; }
   pose(view) {
     const style = this.art.pose, frame = style === 'walk' ? this.walkFrame : 0;
-    const img = monsterSprite(this.data.type, this.data.flash, frame, this.variant);
+    const img = this.art.wizard // a Reflection: a caster in the colour of the one it copies
+      ? wizardSprite(this.data.mimic || '#e1f5fe', this.data.flash, frame)
+      : monsterSprite(this.data.type, this.data.flash, frame, this.variant);
     let w = img.width, h = img.height, bob = 0;
     if (style === 'hop') {
       const t = this.moving ? this.walkTime * 9 : view.now / 300 + this.id, sq = this.moving ? Math.sin(t) : Math.sin(t) * 0.35;
@@ -324,13 +342,14 @@ export class Creature extends Enemy {
   draw(r, view) {
     const d = this.data, ctx = r.ctx, { x: sx, y: sy } = r.toScreen(this.x, this.y);
     if (d.disguise) return this.drawAsChest(r, view, sx, sy);
+    if (d.sub) return this.drawSubmerged(r, view, sx, sy);
     const { img, w, h, bob } = this.pose(view);
     if (d.aura) { // the Warhorn Goblin's reach: everyone inside throws twice as fast
       ctx.strokeStyle = d.aura; ctx.lineWidth = 1; ctx.globalAlpha = 0.18 + 0.08 * Math.sin(view.now / 200);
       r.orb(sx, sy, 5 * 16, 5 * 16 * 0.75); ctx.stroke(); ctx.globalAlpha = 1;
     }
     r.shadow(sx, sy, Math.min(11, Math.max(4, Math.round(w / 2.6))));
-    ctx.globalAlpha = d.faded ? 0.2 : d.downed ? 0.4 : (this.art.alpha || 1);
+    ctx.globalAlpha = d.faded ? 0.2 : d.downed ? 0.4 : this.art.wizard ? 0.75 : (this.art.alpha || 1);
     r.drawFacing(img, sx, sy - h + 2 - bob, w, h, this.face);
     ctx.globalAlpha = 1;
     const top = sy - h - bob;
@@ -340,16 +359,27 @@ export class Creature extends Enemy {
       ctx.globalAlpha = 0.1; ctx.fillStyle = d.ward; ctx.fill(); ctx.globalAlpha = 1;
     }
     if (d.downed) { r.smallText('z z', sx + 6, top - 2 + Math.round(Math.sin(view.now / 300) * 2), '#c6ff00'); }
+    else if (d.zz) drawSleep(r, view, sx, top);
     let ly = top - 10 + (d.wrong ? Math.round(Math.sin(view.now / 20)) : 0);
     if (d.heads) ly = this.drawHeads(r, view, sx, top, img.width);
     else if (!d.downed) {
-      if (d.faded) ctx.globalAlpha = 0.45;
-      drawLabel(r, view, d, sx, ly, d.boss || d.phase !== undefined ? { done: '#7c9a7e', next: '#ffd54f', rest: '#ffffff' } : this.labelColors);
-      ctx.globalAlpha = 1;
+      const colors = d.boss || d.phase !== undefined ? { done: '#7c9a7e', next: '#ffd54f', rest: d.dark ? '#b39ddb' : '#ffffff' } : this.labelColors;
+      label(r, view, d, () => { if (d.faded) ctx.globalAlpha = 0.45; drawLabel(r, view, d, sx, ly, colors); ctx.globalAlpha = 1; });
+      for (const x of d.extra || []) { ly -= 12; const at = ly; label(r, view, d, () => drawLabel(r, view, x, sx, at, { done: '#7c9a7e', next: '#ffd54f', rest: x.color || '#ffffff' })); } // a second word (the Frost Matron's shell)
+      if (d.q) { const at = ly - 4 - d.q.length * 9; r.onTop(() => drawRiddle(r, d.q, sx, at)); ly = at; }
     }
     if (d.tag) r.smallText(d.tag, sx, ly - (d.morse ? 0 : 2) - (view.insight ? 8 : 0), d.tagColor || '#ffffff');
     if (d.sand !== undefined) this.drawSand(r, sx, ly - 6, d.sand, d.sandMax || 1);
     this.drawStatus(r, view, sx, top);
+  }
+  /** Under the water (Drowned, Drowned Abbot): only rings on the surface and a row of ~ for its name. */
+  drawSubmerged(r, view, sx, sy) {
+    const ctx = r.ctx, t = view.now, d = this.data;
+    ctx.strokeStyle = '#b2dfdb'; ctx.lineWidth = 1;
+    for (let k = 0; k < 2; k++) { const f = (t / 1100 + k / 2 + this.id * 0.13) % 1; ctx.globalAlpha = 0.6 * (1 - f); r.orb(sx, sy, 3 + f * 8, 1.5 + f * 4); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    if (Math.random() < 0.05) view.particles.sparkle(this.x + (Math.random() - 0.5) * 0.4, this.y, '#b2dfdb');
+    drawLabel(r, view, d, sx, sy - 18, { done: '#4f7a8f', next: '#80cbc4', rest: '#80cbc4' });
   }
   /** Until it bites, a Mimic is drawn exactly like a closed chest. */
   drawAsChest(r, view, sx, sy) {
@@ -438,10 +468,20 @@ export class Chest extends Entity {
  * practice dummy or the wishing fountain. Zoo slimes, mages and the Bellwraith reuse the dungeon's sprites.
  */
 export class Critter extends Character {
-  get light() { return this.data.kind === 'fountain' ? { radius: 46, strength: 0.6 } : null; }
+  get light() {
+    const k = this.data.kind;
+    if (k === 'brazier') return this.data.lit ? { radius: 92 + Math.sin(performance.now() / 120) * 4, strength: 1 } : { radius: 14, strength: 0.4 };
+    if (k === 'shrine' || k === 'altar') return { radius: 40, strength: 0.6 };
+    if (k === 'riddle') return this.data.open ? null : { radius: 36, strength: 0.6 };
+    return k === 'fountain' ? { radius: 46, strength: 0.6 } : null;
+  }
   draw(r, view) {
     const d = this.data;
     if (d.kind === 'fountain') return this.drawFountain(r, view);
+    if (d.kind === 'brazier') return this.drawBrazier(r, view);
+    if (d.kind === 'riddle') return this.drawRiddleDoor(r, view);
+    if (d.kind === 'shrine') return this.drawShrine(r, view);
+    if (d.kind === 'altar') return this.drawAltar(r, view);
     const ctx = r.ctx, { x: sx, y: sy } = r.toScreen(this.x, this.y);
     let img, bob = 0, w, h;
     if (d.kind === 'slime' || d.kind === 'mage') img = enemySprite(d.kind, d.flash, d.kind === 'mage' ? this.walkFrame : 0);
@@ -461,6 +501,70 @@ export class Critter extends Character {
     const ly = sy - h - 10 - bob;
     if (d.kind === 'boss') r.morseWord(d.word, d.p, sx, ly, false); // even in the zoo the Bellwraith's name is Morse only
     else drawLabel(r, view, d, sx, ly, d.kind === 'dummy' ? { done: '#8a7a3f', next: '#ffd54f', rest: '#ffffff' } : { done: '#7c9a7e', next: '#f8bbd0', rest: '#ffffff' });
+  }
+  /** A brazier in the catacombs: an iron bowl on three legs, a fire in it once its letter is spelled. */
+  drawBrazier(r, view) {
+    const d = this.data, ctx = r.ctx, { x: sx, y: sy } = r.toScreen(this.x, this.y), t = view.now;
+    r.shadow(sx, sy, 6);
+    ctx.fillStyle = '#0b0910'; ctx.fillRect(sx - 5, sy - 6, 1, 6); ctx.fillRect(sx + 4, sy - 6, 1, 6); ctx.fillRect(sx - 1, sy - 6, 2, 7);
+    ctx.fillStyle = '#0b0910'; ctx.fillRect(sx - 7, sy - 11, 14, 6);
+    ctx.fillStyle = d.flash ? '#ffffff' : '#5d4037'; ctx.fillRect(sx - 6, sy - 10, 12, 4);
+    ctx.fillStyle = '#8d6e63'; ctx.fillRect(sx - 6, sy - 10, 12, 1);
+    if (d.lit) {
+      for (let k = 0; k < 5; k++) {
+        const h = 5 + ((t / 50 + k * 13) % 7);
+        ctx.fillStyle = k % 2 ? '#ff7043' : '#ffca28'; ctx.fillRect(sx - 5 + k * 2, sy - 10 - h, 2, h);
+      }
+      ctx.fillStyle = '#fff59d'; ctx.fillRect(sx - 1, sy - 14, 2, 3);
+      if (Math.random() < 0.3) view.particles.sparkle(this.x + (Math.random() - 0.5) * 0.4, this.y - 0.8, '#ffca28');
+      return;
+    }
+    ctx.fillStyle = '#37474f'; ctx.fillRect(sx - 4, sy - 11, 8, 1); // cold ashes
+    r.onTop(() => drawLabel(r, view, d, sx, sy - 24, { done: '#8a7a3f', next: '#ffca28', rest: '#ffe0b2' }));
+  }
+  /** A rune door's riddle hangs over it; the answer's letters show as ? until spelled (or given as a hint). */
+  drawRiddleDoor(r, view) {
+    const d = this.data, { x: sx, y: sy } = r.toScreen(this.x, this.y);
+    if (d.open) return;
+    if (Math.random() < 0.08) view.particles.sparkle(this.x + (Math.random() - 0.5), this.y, '#ffd54f');
+    r.onTop(() => {
+      drawRiddle(r, d.q || [], sx, sy - 34 - (d.q?.length || 0) * 9);
+      drawLabel(r, view, d, sx, sy - 26, { done: '#8a7a3f', next: '#ffd54f', rest: '#ffe0b2' });
+    });
+  }
+  /** A shrine: a stone pillar with a bowl of blood (MANA) or a violet rune that turns (SWAP). */
+  drawShrine(r, view) {
+    const d = this.data, ctx = r.ctx, { x: sx, y: sy } = r.toScreen(this.x, this.y), t = view.now;
+    const glow = d.sk === 'blood' ? '#ff1744' : '#e040fb';
+    r.shadow(sx, sy, 7);
+    ctx.fillStyle = '#0b0910'; ctx.fillRect(sx - 6, sy - 20, 12, 21);
+    ctx.fillStyle = d.flash ? '#ffffff' : '#78718a'; ctx.fillRect(sx - 5, sy - 19, 10, 19);
+    ctx.fillStyle = '#a7a3b8'; ctx.fillRect(sx - 5, sy - 19, 2, 19);
+    ctx.fillStyle = '#4a4560'; ctx.fillRect(sx - 7, sy - 22, 14, 3);
+    ctx.globalAlpha = 0.6 + 0.3 * Math.sin(t / 200);
+    ctx.fillStyle = glow;
+    if (d.sk === 'blood') { ctx.fillRect(sx - 4, sy - 23, 8, 2); ctx.fillRect(sx - 1, sy - 14, 2, 6); }
+    else { ctx.fillRect(sx - 1, sy - 15, 2, 8); ctx.fillRect(sx - 3, sy - 12, 6, 2); }
+    ctx.globalAlpha = 1;
+    if (Math.random() < 0.08) view.particles.sparkle(this.x + (Math.random() - 0.5) * 0.5, this.y - 1.2, glow);
+    drawLabel(r, view, d, sx, sy - 34, { done: '#7c6a8a', next: '#ffd54f', rest: d.sk === 'blood' ? '#ff8a80' : '#ea80fc' });
+  }
+  /** A challenge altar: a gold-trimmed slab. Idle it asks for DARE; during a trial it burns. */
+  drawAltar(r, view) {
+    const d = this.data, ctx = r.ctx, { x: sx, y: sy } = r.toScreen(this.x, this.y), t = view.now;
+    r.shadow(sx, sy + 1, 10);
+    ctx.fillStyle = '#0b0910'; ctx.fillRect(sx - 10, sy - 10, 20, 11);
+    ctx.fillStyle = d.flash ? '#ffffff' : '#5c5470'; ctx.fillRect(sx - 9, sy - 9, 18, 9);
+    ctx.fillStyle = '#ffca28'; ctx.fillRect(sx - 9, sy - 9, 18, 1); ctx.fillRect(sx - 9, sy - 4, 18, 1);
+    ctx.fillStyle = d.ak === 'nohit' ? '#80deea' : '#ff8a65'; ctx.fillRect(sx - 2, sy - 8, 4, 3); // timed: an ember; untouched: a pearl
+    if (d.state === 'active') {
+      ctx.globalAlpha = 0.25 + 0.15 * Math.sin(t / 90); ctx.fillStyle = '#ffd54f'; r.orb(sx, sy - 5, 16, 12); ctx.fill(); ctx.globalAlpha = 1;
+      if (Math.random() < 0.3) view.particles.sparkle(this.x + (Math.random() - 0.5), this.y - 0.4, '#ffd54f');
+    }
+    if (d.state === 'idle') {
+      r.smallText(d.ak === 'nohit' ? 'trial: untouched' : 'trial: in time', sx, sy - 22, '#ffe082');
+      drawLabel(r, view, d, sx, sy - 44, { done: '#8a7a3f', next: '#ffd54f', rest: '#ffffff' });
+    } else if (d.state !== 'active') r.smallText(d.state === 'won' ? 'trial won' : 'trial lost', sx, sy - 14, d.state === 'won' ? '#fff59d' : '#ef5350');
   }
   /** A round stone basin with a spout in the middle; the water ripples and the jet sparkles. */
   drawFountain(r, view) {
@@ -491,7 +595,12 @@ export class Critter extends Character {
 
 export class Spell extends Entity {
   get depth() { return this.y + 0.05; }
-  get color() { return this.data.o === 'e' ? '#ff5252' : (this.data.c || '#4fc3f7'); }
+  get color() {
+    const d = this.data;
+    if (d.seed) return '#7cb342';           // a seed: a vine grows where it falls
+    if (d.l === '?') return '#37474f';      // an Ink Wraith's blot, until you are close
+    return d.o === 'e' ? '#ff5252' : (d.c || '#4fc3f7');
+  }
   get light() { return { radius: 34, strength: 0.8 }; }
   /**
    * Spells fly fast (8 tiles a second) and straight, so drawing them 100 ms in the past like everything else

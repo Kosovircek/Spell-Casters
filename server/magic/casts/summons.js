@@ -36,7 +36,7 @@ export const SUMMONS = {
     },
   },
   spider: {
-    cast(m, c) { const p = near(m, c.pl.x + c.dx * 0.8, c.pl.y + c.dy * 0.8); m.summon(new Spider(m, c.pl, p.x, p.y)); },
+    cast(m, c) { const p = near(m, c.pl.x + c.dx * 0.8, c.pl.y + c.dy * 0.8); m.summon(new Spider(m, c.pl, p.x, p.y, c.power)); },
   },
   ghost: {
     cast(m, c) { m.summon(new Ghost(m, c.pl, c.pl.x + c.dx * 0.6, c.pl.y + c.dy * 0.6)); },

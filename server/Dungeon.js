@@ -8,13 +8,31 @@ import { rint } from './util.js';
 export const TILE = {
   WALL: 0, FLOOR: 1, GRASS: 2, PATH: 3, TREE: 4, HOUSE: 5, SHOP: 6, HOME_DOOR: 7, SHOP_DOOR: 8, ARENA: 9, ARENA_DOOR: 10,
   FENCE: 11, FOUNTAIN: 12, LAMP: 13, // the zoo's and the practice yard's fences, the wishing fountain's basin, lamp posts
+  // biome ground (see biomes/terrain.js)
+  SHALLOW: 14,  // shallow water: walkable, slows casters
+  DEEP: 15,     // deep water: spells fly over it, nobody walks it (GELU freezes it into ICE)
+  LAVA: 16,     // like deep water, but hot (GELU and GRANDO cool it into ROCK)
+  ROCK: 17,     // cooled lava
+  VENT: 18,     // a forge vent: walkable, erupts on a beat
+  ICE: 19,      // slippery
+  ICEWALL: 20,  // a block of ice: solid; fire and light melt it, three letter spells chip it away
+  VINE: 21,     // a thicket: solid; a letter spell cuts one tile, fire burns a patch. Grows back
+  ASH: 22,      // where a vine was cut or burned
+  RUNEDOOR: 23, // a library's riddle door: you cannot walk through it, spells fly through
+  SLOT: 24,     // clockwork floor a piston or a rotor arm may close over
+  CHASM: 25,    // the void: spells fly over it
+  BRIDGE: 26,   // a void bridge: crumbles a moment after someone steps on it, comes back later
+  BLADES: 27,   // a clockwork blade plate: snaps up on a beat
 };
 /** Tiles travel as one character each: 0-9, then a, b... (base 36), so old all-digit saves still load. */
 const encodeTiles = (tiles) => Array.from(tiles, t => t.toString(36)).join('');
 
-export const WALKABLE = new Set([TILE.FLOOR, TILE.GRASS, TILE.PATH, TILE.HOME_DOOR, TILE.SHOP_DOOR, TILE.ARENA_DOOR]);
-/** Low things you cannot walk through but spells fly over: fences and the fountain's basin. */
-export const LOW = new Set([TILE.FENCE, TILE.FOUNTAIN]);
+export const WALKABLE = new Set([TILE.FLOOR, TILE.GRASS, TILE.PATH, TILE.HOME_DOOR, TILE.SHOP_DOOR, TILE.ARENA_DOOR,
+  TILE.SHALLOW, TILE.ROCK, TILE.VENT, TILE.ICE, TILE.ASH, TILE.SLOT, TILE.BRIDGE, TILE.BLADES]);
+/** Low things you cannot walk through but spells fly over: fences, the fountain's basin, deep water, lava, the void, rune doors. */
+export const LOW = new Set([TILE.FENCE, TILE.FOUNTAIN, TILE.DEEP, TILE.LAVA, TILE.RUNEDOOR, TILE.CHASM]);
+/** Plain ground that things may be put on (walls raised, lava poured, vines planted...). */
+export const GROUND = new Set([TILE.FLOOR, TILE.GRASS, TILE.PATH, TILE.SHALLOW, TILE.ROCK, TILE.ICE, TILE.ASH]);
 const AIRWAY = new Set([...WALKABLE, ...LOW]);
 
 /** One generated floor: tile grid, rooms, start room, stairs down and up, plus collision and path helpers. */
@@ -26,12 +44,16 @@ export class Dungeon {
     this.tiles = new Uint8Array(this.w * this.h); // 0 = wall, 1 = floor
     this.rooms = [];
     this.magicWalls = new Set(); // tiles a MURUS wall or a CAVEA cage stands on right now: solid for walking and spells
+    this.envWalls = new Set();   // tiles the biome's machinery closes right now (pistons, rotors): solid too
+    this.envHoles = new Set();   // crumbled void bridges: nobody can stand there, spells fly over
+    this.env = null;             // the biome's fixed features (vents, wells, braziers...), see biomes/terrain.js
     if (saved) this.restore(saved); else this.generate();
   }
 
   // ---- saving
-  toSave() { return { tiles: encodeTiles(this.tiles), rooms: this.rooms, stairs: this.stairs, up: this.up }; }
+  toSave() { return { tiles: encodeTiles(this.tiles), rooms: this.rooms, stairs: this.stairs, up: this.up, ...(this.env ? { env: this.env } : {}) }; }
   restore(saved) {
+    this.env = saved.env || null;
     this.tiles = Uint8Array.from(saved.tiles, c => parseInt(c, 36));
     this.rooms = saved.rooms;
     this.start = this.rooms[0];
@@ -79,17 +101,24 @@ export class Dungeon {
   solid(x, y) {
     const i = Math.floor(x), j = Math.floor(y);
     if (i < 0 || j < 0 || i >= this.w || j >= this.h) return true;
-    return !WALKABLE.has(this.tiles[j * this.w + i]) || this.magicWalls.has(j * this.w + i);
+    const n = j * this.w + i;
+    return !WALKABLE.has(this.tiles[n]) || this.magicWalls.has(n) || this.envWalls.has(n) || this.envHoles.has(n);
   }
+  tile(i, j) { return i < 0 || j < 0 || i >= this.w || j >= this.h ? TILE.WALL : this.tiles[j * this.w + i]; }
+  /** The tile under a point. */
+  tileUnder(x, y) { return this.tile(Math.floor(x), Math.floor(y)); }
+  /** Change one tile (the Level tells the clients; see Level.setTile). */
+  setTile(i, j, t) { if (i > 0 && j > 0 && i < this.w - 1 && j < this.h - 1) this.tiles[j * this.w + i] = t; }
   /** Does this spot stop a flying spell? Like solid(), except spells pass over low fences and the fountain. */
   airSolid(x, y) {
     const i = Math.floor(x), j = Math.floor(y);
     if (i < 0 || j < 0 || i >= this.w || j >= this.h) return true;
-    return !AIRWAY.has(this.tiles[j * this.w + i]) || this.magicWalls.has(j * this.w + i);
+    const n = j * this.w + i;
+    return !AIRWAY.has(this.tiles[n]) || this.magicWalls.has(n) || this.envWalls.has(n);
   }
   /** Would a circle of radius r at (x, y) overlap a wall? */
   /** A plain floor tile that walls could stand on (not stairs, doors or a raised block). */
-  open(i, j) { return i > 0 && j > 0 && i < this.w - 1 && j < this.h - 1 && [TILE.FLOOR, TILE.GRASS, TILE.PATH].includes(this.tiles[j * this.w + i]) && !this.stairsAt(i + 0.5, j + 0.5) && !this.magicWalls.has(j * this.w + i); }
+  open(i, j) { return i > 0 && j > 0 && i < this.w - 1 && j < this.h - 1 && GROUND.has(this.tiles[j * this.w + i]) && !this.stairsAt(i + 0.5, j + 0.5) && !this.magicWalls.has(j * this.w + i) && !this.envWalls.has(j * this.w + i); }
   blocked(x, y, r) { return this.solid(x - r, y - r) || this.solid(x + r, y - r) || this.solid(x - r, y + r) || this.solid(x + r, y + r); }
   /** Clear line of sight between two points? (You can see, and cast, over low fences.) */
   los(ax, ay, bx, by) {
@@ -121,7 +150,7 @@ export class Dungeon {
     const sx = Math.floor(ax), sy = Math.floor(ay), gx = Math.floor(bx), gy = Math.floor(by);
     const start = sy * this.w + sx, goal = gy * this.w + gx;
     if (start === goal) return [];
-    const air = (n) => AIRWAY.has(this.tiles[n]) && !this.magicWalls.has(n);
+    const air = (n) => AIRWAY.has(this.tiles[n]) && !this.magicWalls.has(n) && !this.envWalls.has(n);
     const prev = new Int32Array(this.w * this.h).fill(-1), depth = new Uint8Array(this.w * this.h);
     prev[start] = start; const q = [start];
     for (let qi = 0; qi < q.length; qi++) {
@@ -144,7 +173,7 @@ export class Dungeon {
   }
 
   /** What the client needs to draw the floor. */
-  toMessage(floor, pool) {
-    return { t: 'map', w: this.w, h: this.h, tiles: encodeTiles(this.tiles), floor, stairs: this.stairs, up: this.up || null, pool, hit: HITBOX };
+  toMessage(floor, pool, extra = {}) {
+    return { t: 'map', w: this.w, h: this.h, tiles: encodeTiles(this.tiles), floor, stairs: this.stairs, up: this.up || null, pool, hit: HITBOX, ...extra };
   }
 }

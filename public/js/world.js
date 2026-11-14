@@ -4,7 +4,11 @@ import { Player, Enemy, Chest, Spell, FloorItem, Critter, Minion } from './entit
 // Tile codes from the server (see server/Dungeon.js): 0 wall, 1 floor, 2 grass, 3 path, 4 tree, 5 house, 6 shop,
 // 7 house door, 8 shop door, 9 duel arena, 10 (sent as 'a') arena gate, 11 ('b') fence, 12 ('c') the fountain's
 // basin, 13 ('d') lamp post. Doors can be walked into; fences and the basin are low (spells fly over them).
-export const WALKABLE = new Set([1, 2, 3, 7, 8, 10]);
+// The biomes add 14 shallow water, 15 deep water, 16 lava, 17 cooled rock, 18 vent, 19 ice, 20 ice wall, 21 vine,
+// 22 ash, 23 rune door, 24 machine slot, 25 the void, 26 void bridge, 27 blade plate (see art/biomes.js).
+export const WALKABLE = new Set([1, 2, 3, 7, 8, 10, 14, 17, 18, 19, 22, 24, 26, 27]);
+/** Flat ground nobody walks on: deep water, lava and the void are drawn as ground, not as walls. */
+const FLAT = new Set([15, 16, 25]);
 
 // Other casters, enemies and spells are drawn this far in the past (two server ticks), so there is nearly always
 // a newer snapshot to slide toward even when Wi-Fi delivers them unevenly.
@@ -18,6 +22,8 @@ export class World {
     this.clock = null;      // performance.now() minus server time, for the fastest snapshot seen lately
     this.magic = null;      // effect spells on the floor: { z: zones, mk: marks, w: rune-stone tiles, pt: portals }
     this.magicWalls = new Set();
+    this.env = {};          // the biome's moving parts: { w: machine walls, h: holes, hot, warm, up, warn, wind, bliz, ch }
+    this.envWalls = new Set(); this.envHoles = new Set();
   }
 
   setMap(msg) {
@@ -27,8 +33,12 @@ export class World {
   }
   tileAt(i, j) { const m = this.map; return i < 0 || j < 0 || i >= m.w || j >= m.h ? 0 : m.tiles[j * m.w + i]; }
   walkable(i, j) { return WALKABLE.has(this.tileAt(i, j)); }
-  /** Can my caster walk here right now? Like walkable, but MURUS walls and CAVEA cages are in the way. */
-  passable(i, j) { return this.walkable(i, j) && !this.magicWalls.has(j * this.map.w + i); }
+  /** Ground that is drawn flat: walkable, or deep water, lava, the void. */
+  flat(i, j) { const t = this.tileAt(i, j); return WALKABLE.has(t) || FLAT.has(t); }
+  /** Can my caster walk here right now? Like walkable, but MURUS walls, CAVEA cages, closed machinery and holes are in the way. */
+  passable(i, j) { const n = j * this.map.w + i; return this.walkable(i, j) && !this.magicWalls.has(n) && !this.envWalls.has(n) && !this.envHoles.has(n); }
+  /** A tile changed (ice froze, a door opened, a vine grew). */
+  setTile(n, v) { if (this.map && n >= 0 && n < this.map.tiles.length) this.map.tiles[n] = v; }
   /** The shop, house or arena door at this tile, if any. */
   doorAt(i, j) { return (this.map?.doors || []).find(d => d.x === i && d.y === j) || null; }
   get ready() { return !!(this.map && this.state); }
@@ -38,6 +48,9 @@ export class World {
     this.state = state;
     this.magic = state.magic || null;
     this.magicWalls = new Set(this.magic ? this.magic.w : []);
+    this.env = state.env || {};
+    this.envWalls = new Set(this.env.w || []); this.envHoles = new Set(this.env.h || []);
+    for (const e of state.ev || []) if (e.t === 'tile') this.setTile(e.n, e.v);
     const ts = state.ts;
     if (ts !== undefined) {
       // keep the offset of the quickest arrivals: drop at once to a faster one, drift up slowly otherwise

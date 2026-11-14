@@ -35,8 +35,18 @@ export const ELEMENTS = {
     cast: (m, c) => m.orb(c, { speed: m.duel ? 9 : 14, turn: m.duel ? 0.4 : 6 }),
     land(m, c, x, y, foe) {
       if (!foe) return;
-      m.hurt(foe, 1, Math.round(8 * c.power), c.pl, 'bolt');
+      const env = m.room.env, wet = !m.duel && env && env.inWater(foe);
+      m.hurt(foe, wet ? 2 : 1, Math.round(8 * c.power), c.pl, 'bolt');
       if (m.duel) return m.status(foe, 'stun', 300, c.pl);
+      if (wet) { // the Flooded Crypt: the bolt runs through the water to everyone standing in it, twice as hard
+        m.room.emit({ t: 'shock', x: foe.x, y: foe.y });
+        for (const e of m.foes(c.pl)) {
+          if (e === foe || !env.inWater(e) || e.distanceTo(foe) > 8) continue;
+          m.room.emit({ t: 'chain', x: foe.x, y: foe.y, x2: e.x, y2: e.y });
+          m.hurt(e, 2, 0, c.pl, 'bolt');
+        }
+        return;
+      }
       let from = foe; const hit = new Set([foe]);
       for (let k = 0; k < 2; k++) { // jumps to two more enemies nearby
         const next = m.foes(c.pl).filter(e => !hit.has(e) && e.distanceTo(from) <= 5 && m.room.dungeon.los(from.x, from.y, e.x, e.y))
