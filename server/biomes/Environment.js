@@ -374,7 +374,7 @@ export class Environment {
       const back = p.safe || dg.beside('up');
       this.lv.emit({ t: 'fall', x: p.x, y: p.y, id: p.id });
       p.x = back.x; p.y = back.y; p.knock = null;
-      p.hp = Math.max(1, p.hp - Math.ceil(p.maxHp * 0.12)); p.hurt = 0.4;
+      if (!p.immortal) { p.hp = Math.max(1, p.hp - Math.ceil(p.maxHp * 0.12)); p.hurt = 0.4; }
       this.lv.emit({ t: 'hurt', x: p.x, y: p.y, id: p.id, n: Math.ceil(p.maxHp * 0.12) });
       p.tell('You fall into the void... and claw your way back up.');
       this.onCasterHurt(p);

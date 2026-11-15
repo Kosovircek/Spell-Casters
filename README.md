@@ -226,7 +226,7 @@ Tap the rune **..--** first (a non-standard Morse sign, drawn as a glowing ✦),
 - **Learning**: spellbooks turn up hidden on floors, from bosses and rare enemies, and in the shop (the easy ones). Read a book (r) and a puzzle opens: a Morse cipher, an anagram, a riddle, a letter shift or mirrored Morse. Type the answer and press Enter (or tap it in Morse and aim). Solving it writes the spell into your grimoire. You can cast it once you reach the book's level (no level gates in duels).
 - **Grimoire**: G (or the Spells segment of the touch ring) lists every spell by school, known and still to find.
 - **Spell strip**: while you type ✦ it shows the known spells that fit, with mana, cooldown and level.
-- **Dumbledore**: play as `Dumbledore` to get the test character: max level, every effect spell known, full mana and one of every item in the house.
+- **Dumbledore**: play as `Dumbledore` to get the test character: max level, immortal, endless mana, every effect spell known and one of every item in the house (in a duel Dumbledore can be hurt and pays mana like anyone, so duels stay fair).
 
 | Word | Id | School | Lv | Mana | Cooldown | What it does |
 |---|---|---|---|---|---|---|

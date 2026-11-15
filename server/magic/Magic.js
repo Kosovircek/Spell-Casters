@@ -144,7 +144,7 @@ export class Magic {
     }
     const left = g.cooldownLeft(sp.id, now);
     if (left > 0) return fizzle(`${sp.word} is not ready yet (${Math.ceil(left / 1000)} s).`);
-    if (tide) cost = 0;
+    if (tide || pl.immortal) cost = 0; // Dumbledore's mana never runs out
     if (g.mana < cost) return fizzle(`Not enough mana for ${sp.word}: it needs ${cost}, you have ${Math.floor(g.mana)}.`);
     g.mana -= cost;
     g.cooldowns[sp.id] = now + sp.cd * 1000 * (tide ? 0.5 : 1);

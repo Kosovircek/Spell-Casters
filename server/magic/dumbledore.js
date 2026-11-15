@@ -35,5 +35,6 @@ export function makeDumbledore(pl) {
   pl.home = everyItem();
   pl.homeSize = pl.home.length + 24;
   pl.gold = Math.max(pl.gold, 99999);
-  pl.tell('Dumbledore: max level, every effect spell, and one of everything in your house. Have fun!');
+  pl.immortal = true; // no damage, and effect spells cost no mana (only outside duels: a duel stays fair)
+  pl.tell('Dumbledore: max level, immortal, endless mana, every effect spell, and one of everything in your house. Have fun!');
 }

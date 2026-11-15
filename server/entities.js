@@ -321,6 +321,7 @@ export class Player extends Actor {
     dmg = Math.max(1, Math.round(dmg));
     if (this.has('gaze') && spell.source && !spell.source.removed) spell.source.stun(now, 2000, room, 'stone');
     if (this.has('vanish')) this.vanishUntil = now + 2000;
+    if (this.immortal) { room.emit({ t: 'ward', x: this.x, y: this.y }); return false; } // Dumbledore shrugs it off
     this.hp -= dmg; this.hurt = 0.4;
     room.emit({ t: 'hurt', x: this.x, y: this.y, id: this.id, n: dmg });
     if (this.hp <= 0 && this.has('pearl') && !this.pearlUsed) {
