@@ -69,3 +69,29 @@ export function drawWord(ctx, word, cx, y, colorFn) {
 }
 
 // Sprites as palette strings.
+
+// A tiny 3x5 font for letters drawn smaller than spell letters (the ward letters circling a caster).
+const TINY = {
+  A: '.#. #.# ### #.# #.#', B: '##. #.# ##. #.# ##.', C: '.## #.. #.. #.. .##', D: '##. #.# #.# #.# ##.', E: '### #.. ##. #.. ###',
+  F: '### #.. ##. #.. #..', G: '.## #.. #.# #.# .##', H: '#.# #.# ### #.# #.#', I: '### .#. .#. .#. ###', J: '..# ..# ..# #.# .#.',
+  K: '#.# #.# ##. #.# #.#', L: '#.. #.. #.. #.. ###', M: '#.# ### #.# #.# #.#', N: '##. #.# #.# #.# #.#', O: '.#. #.# #.# #.# .#.',
+  P: '##. #.# ##. #.. #..', Q: '.#. #.# #.# ##. .##', R: '##. #.# ##. #.# #.#', S: '.## #.. .#. ..# ##.', T: '### .#. .#. .#. .#.',
+  U: '#.# #.# #.# #.# ###', V: '#.# #.# #.# #.# .#.', W: '#.# #.# ### ### #.#', X: '#.# #.# .#. #.# #.#', Y: '#.# #.# .#. .#. .#.',
+  Z: '### ..# .#. #.. ###',
+};
+const tinyCache = {};
+/** One tiny letter (3x5 plus a dark outline, 5x7 in all), or null if the tiny font lacks it. */
+export function tinyGlyph(ch, color) {
+  const key = ch + color;
+  if (key in tinyCache) return tinyCache[key];
+  let rows = TINY[ch];
+  if (!rows) return (tinyCache[key] = null);
+  const c = makeCanvas(5, 7), g = c.getContext('2d');
+  const on = (x, y) => rows[y * 4 + x] === '#'; // rows are 'abc def ...'
+  g.fillStyle = '#0b0910';
+  for (let y = 0; y < 5; y++) for (let x = 0; x < 3; x++) if (on(x, y))
+    for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) g.fillRect(x + 1 + ox, y + 1 + oy, 1, 1);
+  g.fillStyle = color;
+  for (let y = 0; y < 5; y++) for (let x = 0; x < 3; x++) if (on(x, y)) g.fillRect(x + 1, y + 1, 1, 1);
+  return (tinyCache[key] = c);
+}

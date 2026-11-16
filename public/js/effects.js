@@ -68,7 +68,11 @@ export class EventEffects {
       case 'regen': p.burst(e.x, e.y, '#81c784', 8, 30, 0.5); p.text(e.x, e.y, '+' + (e.n || 1), '#81c784'); break;
       case 'xp': if (e.id === this.getMyId()) p.text(e.x, e.y - 0.5, '+' + e.n + ' XP', '#ce93d8'); break;
       case 'levelup': sfx('stairs'); p.burst(e.x, e.y, '#ffd54f', 40, 80, 1.1); p.text(e.x, e.y - 0.8, 'LEVEL ' + e.lv, '#ffd54f'); break;
-      case 'sblock': sfx('block'); p.burst(e.x, e.y, '#90caf9', 14, 50, 0.5); p.text(e.x, e.y, 'SHIELD ' + e.l, '#90caf9'); break;
+      case 'sblock': {
+        sfx('block'); p.burst(e.x, e.y, '#90caf9', 14, 50, 0.5); p.text(e.x, e.y, 'SHIELD ' + e.l, '#90caf9');
+        const who = this.world?.entities.get(e.id); if (who) who.wardFlash = { l: e.l, at: performance.now() }; // that orbiting letter lights up
+        break;
+      }
       case 'pelt': sfx('ward'); p.burst(e.x, e.y, '#ffb74d', 14, 50, 0.5); p.text(e.x, e.y, 'PELT', '#ffb74d'); break;
       case 'pearl': sfx('ward'); p.burst(e.x, e.y, '#e1f5fe', 30, 70, 0.9); p.text(e.x, e.y, 'PEARL', '#e1f5fe'); break;
       case 'stun': p.burst(e.x, e.y, e.kind === 'stone' ? '#9e9e9e' : '#fff59d', 8, 30, 0.4); if (e.kind === 'stone') p.text(e.x, e.y - 1, 'STONE', '#bdbdbd'); break;

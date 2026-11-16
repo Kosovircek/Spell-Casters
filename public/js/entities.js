@@ -11,7 +11,7 @@
 //      ├── Minion (summons from effect spells; art in art/summons.js)
 //      └── FloorItem
 import { TS, prettyMorse } from './constants.js';
-import { drawWord } from './art/font.js';
+import { drawWord, tinyGlyph } from './art/font.js';
 import { wizardSprite, enemySprite, chestSprite, itemSprite, wraithSprite, bellSprite } from './art/sprites.js';
 import { critterSprite } from './art/critters.js';
 import { MONSTERS, monsterSprite } from './art/monsters.js';
@@ -21,7 +21,8 @@ import { summonSprite, FLYING } from './art/summons.js';
 export const RUNE_COLOR = '#e040fb'; // the rune ..-- (an effect spell) glows violet wherever it is drawn
 const SCHOOL_COLOR = { elements: '#ff8a65', summons: '#aed581', control: '#4fc3f7', utility: '#ce93d8' };
 export const ORB_LIFT = 8;      // px a spell's orb floats above its spot on the floor; hitboxes are drawn at this height
-const SPELL_LEAD_MS = 80;       // never carry a spell further than this past its newest snapshot
+const SPELL_LEAD_MS = 80;
+const WARD_COLOR = '#80d8ff', WARD_DIM = '#4f83cc'; // the small letters a caster's shields block, circling them       // never carry a spell further than this past its newest snapshot
 
 // ------------------------------------------------------------------ base classes
 
@@ -218,6 +219,8 @@ export class Player extends Character {
     if (veiled) return this.drawShimmer(r, view, sx, sy);
     if (d.dead) ctx.globalAlpha = 0.35; else if (d.hidden || d.conc) ctx.globalAlpha = 0.45; // Ring of Gyges
     r.shadow(sx, sy, 6);
+    const ward = !d.dead && !(d.hidden && !mine) ? this.wardLetters(r, view, sx, sy) : null;
+    if (ward) ward.back(); // the half of the ring behind the caster
     const frame = this.walkFrame;
     const img = wizardSprite(d.color, d.hurt && Math.floor(view.now / 60) % 2 === 0, frame);
     r.drawFacing(img, sx, sy - img.height + 2 - (this.moving && frame === 0 ? 1 : 0), img.width, img.height, this.face);
@@ -227,6 +230,7 @@ export class Player extends Character {
     }
     ctx.globalAlpha = 1;
     if (!d.dead) drawStatus(r, view, d.st, sx, sy, sy - img.height, { wx: this.x, wy: this.y });
+    if (ward) r.onTop(ward.front); // the front half, above particles and the dark like spell letters
     if (d.clone) { ctx.globalAlpha = 0.3 + 0.15 * Math.sin(view.now / 120); r.drawFacing(img, sx + 6, sy - img.height + 1, img.width, img.height, this.face); ctx.globalAlpha = 1; } // GEMINI
     const morse = view.morse;
     // The spell being typed floats above the wizard: mine from my own Morse key, everyone else's from the server.
@@ -243,6 +247,37 @@ export class Player extends Character {
       ctx.fillStyle = d.hp / d.maxHp > 0.3 ? '#81c784' : '#ef5350'; ctx.fillRect(sx - w / 2, sy + 4, filled, 2);
       if (d.maxMana) { ctx.fillStyle = '#1d2340'; ctx.fillRect(sx - w / 2, sy + 6, w, 2); ctx.fillStyle = '#7c4dff'; ctx.fillRect(sx - w / 2, sy + 6, Math.round(w * d.mana / d.maxMana), 2); }
     }
+  }
+  /**
+   * The letters my shields block, small, circling me on a tilted ring with a trail of sparks. A letter that just
+   * stopped a spell flashes white and swells the ring for a moment. Returns { back, front } drawers, or null.
+   */
+  wardLetters(r, view, sx, sy) {
+    const letters = [...(this.data.stats?.blocks || '')].filter(ch => tinyGlyph(ch, WARD_COLOR));
+    if (!letters.length) return null;
+    const t = view.now, n = letters.length, g = r.ctx;
+    const flash = this.wardFlash && t - this.wardFlash.at < 450 ? this.wardFlash : null;
+    const rx = 12 + n * 0.6 + (flash ? 2 : 0), ry = rx * 0.36, cy = sy - 6;
+    const spin = t / 1100 * (n > 6 ? 0.8 : 1);
+    const spots = letters.map((ch, i) => {
+      const a = spin + i * Math.PI * 2 / n;
+      return { ch, a, x: sx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry + Math.sin(t / 260 + i * 1.7), behind: Math.sin(a) < 0, lit: flash && flash.l === ch };
+    });
+    // a soft trail: now and then a spark peels off a letter and drifts away
+    for (const s of spots) if (Math.random() < 0.07) {
+      view.particles.trail(this.x + (s.x - sx) / TS, this.y + (s.y - sy + 8) / TS, Math.random() < 0.5 ? '#80d8ff' : '#e1f5fe');
+    }
+    const draw = (behind) => () => {
+      // a faint glowing track for the letters to ride on
+      g.strokeStyle = WARD_COLOR; g.lineWidth = 1; g.globalAlpha = (behind ? 0.12 : 0.22) + (flash ? 0.3 : 0);
+      g.beginPath(); g.ellipse(sx, cy, rx, ry, 0, behind ? Math.PI : 0, behind ? Math.PI * 2 : Math.PI); g.stroke();
+      for (const s of spots) if (s.behind === behind) {
+        g.globalAlpha = behind ? 0.55 : 1;
+        g.drawImage(tinyGlyph(s.ch, s.lit ? '#ffffff' : behind ? WARD_DIM : WARD_COLOR), Math.round(s.x - 2), Math.round(s.y - 3));
+      }
+      g.globalAlpha = 1;
+    };
+    return { back: draw(true), front: draw(false) };
   }
   /** An invisible caster: a faint ripple in the air, nothing more. */
   drawShimmer(r, view, sx, sy) {

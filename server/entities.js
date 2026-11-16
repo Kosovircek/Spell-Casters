@@ -310,7 +310,7 @@ export class Player extends Actor {
    * Returns true if it got through and hurt.
    */
   takeHit(room, now, spell) {
-    if (spell.letters && this.blockSet.has(spell.letters)) { room.emit({ t: 'sblock', x: this.x, y: this.y, l: spell.letters }); return false; }
+    if (spell.letters && this.blockSet.has(spell.letters)) { room.emit({ t: 'sblock', x: this.x, y: this.y, l: spell.letters, id: this.id }); return false; }
     if (this.ward > 0) { this.ward--; room.emit({ t: 'ward', x: this.x, y: this.y }); return false; }
     if (this.has('reflect') && Math.random() < 0.25) { room.emit({ t: 'reflect', x: this.x, y: this.y }); return false; }
     this.lastHitAt = now;

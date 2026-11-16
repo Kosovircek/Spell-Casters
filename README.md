@@ -83,6 +83,8 @@ A new game starts on **the surface**, a small village above the dungeon with you
 | Scroll of Descent to Floor 10 / 20 / 30 / 40 / 50 | 400 / 1000 / 2000 / 3500 / 5000 | After 5 seconds you go straight to that floor |
 | Bronze / Iron weapons and armour | 40 / 120 (mail 60 / 180) | Plain common gear; a shop shield blocks one random common letter |
 
+Every letter your shields block circles you as a small glowing letter, so you and the party can see your wards at a glance. When one of them stops a spell, it flashes white.
+
 A travel scroll that would do nothing (Recall on the surface before anyone has been down, or a descent to the floor you are on) is not used up. Chests can also hold a Scroll of Recall now and then.
 
 ## Levels, HP and damage
