@@ -18,6 +18,8 @@ import { SPELL } from '../config.js';
 
 let lastZone = 0;
 
+export const LONG = 3, HOLD = 2;   // dungeon multipliers (see the constructor)
+
 export class Magic {
   /**
    * room provides: dungeon, spells, players, emit(), say(), and either enemies + chip() (a dungeon floor) or
@@ -32,6 +34,10 @@ export class Magic {
   reset() {
     if (this.walls) for (const w of this.walls) for (const t of w.tiles) this.room.dungeon.magicWalls.delete(t);
     this.zones = []; this.minions = []; this.marks = []; this.walls = []; this.portals = [];
+    // In the dungeon effect spells last much longer than in a duel (where the timings are tuned for a fair fight):
+    // zones, summons and rune walls three times as long, what they do to enemies twice as long.
+    this.long = this.duel ? 1 : LONG;
+    this.hold = this.duel ? 1 : HOLD;
   }
 
   // ------------------------------------------------------------------ who is who
@@ -65,6 +71,7 @@ export class Magic {
   /** Put a status on a foe (bosses shrug off the movement ones faster). */
   status(t, name, ms, by) {
     if (!t || t.removed || t.dead) return;
+    ms *= this.hold;
     if (t.isBoss && ['root', 'stun', 'fear', 'confuse'].includes(name)) ms *= 0.5;
     t.setStatus(name, ms);
     this.room.emit({ t: 'status', x: t.x, y: t.y, s: name });
@@ -185,6 +192,7 @@ export class Magic {
    */
   zone(kind, x, y, r, secs, owner, opts = {}) {
     const now = Date.now();
+    if (!opts.fixed) secs *= this.long;
     const z = { id: 'z' + ++lastZone, kind, x, y, r, owner, until: now + secs * 1000, nextAt: now + (opts.delay ?? 0), ...opts };
     this.zones.push(z);
     this.room.env?.onZone(kind, x, y, r); // GELU freezes water and cools lava, fire burns vines and melts ice
@@ -197,6 +205,7 @@ export class Magic {
   }
   /** Rune stones on these tiles for secs (tiles with someone standing on them are skipped). */
   raise(tiles, secs) {
+    secs *= this.long;
     const dg = this.room.dungeon, w = dg.w, out = [];
     const bodies = [...this.room.players.values(), ...(this.room.enemies || []), ...this.minions];
     for (const [i, j] of tiles) {

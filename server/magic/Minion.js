@@ -19,7 +19,7 @@ export class Minion extends Actor {
     this.magic = magic;
     this.owner = owner;
     this.kind = kind;
-    this.until = Date.now() + secs * 1000;
+    this.until = Date.now() + secs * (kind === 'wisp' ? 1 : magic.long || 1) * 1000; // longer in the dungeon
     this.speed = opts.speed ?? 3;
     this.flying = !!opts.flying;      // flies over walls
     this.lure = !!opts.lure;          // enemies would rather shoot at it than at a caster

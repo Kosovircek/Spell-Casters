@@ -1,15 +1,17 @@
 // Utility spells: mirror, echo (handled in Magic.cast), light, invisibility, drain, portals, clone and revive.
 
+const FOREVER = 24 * 3600; // seconds: 'permanent' (IANUA's portals in the dungeon)
+
 export const UTILITY = {
   mirror: {
-    cast(m, c) { c.pl.setStatus('mirror', 5000 * c.power); m.room.emit({ t: 'buff', x: c.pl.x, y: c.pl.y, s: 'mirror' }); },
+    cast(m, c) { c.pl.setStatus('mirror', 5000 * c.power * m.long); m.room.emit({ t: 'buff', x: c.pl.x, y: c.pl.y, s: 'mirror' }); },
   },
   echo: { cast() {} }, // Magic.cast runs the last effect spell instead
   light: {
-    cast(m, c) { c.pl.setStatus('lit', 25000 * c.power); m.room.emit({ t: 'buff', x: c.pl.x, y: c.pl.y, s: 'lit' }); },
+    cast(m, c) { c.pl.setStatus('lit', (m.duel ? 25000 * c.power : 600000)); m.room.emit({ t: 'buff', x: c.pl.x, y: c.pl.y, s: 'lit' }); },
   },
   invis: {
-    cast(m, c) { c.pl.setStatus('invis', 5000); m.room.emit({ t: 'vanish', x: c.pl.x, y: c.pl.y }); },
+    cast(m, c) { c.pl.setStatus('invis', 5000 * m.long); m.room.emit({ t: 'vanish', x: c.pl.x, y: c.pl.y }); },
   },
   drain: {
     cast: (m, c) => m.orb(c),
@@ -28,13 +30,13 @@ export const UTILITY = {
     cast(m, c) {
       const { pl, dx, dy } = c, dg = m.room.dungeon;
       let b = null;
-      for (let d = 8; d >= 2; d -= 0.5) { // the farthest spot in sight you could stand on
+      for (let d = m.duel ? 8 : 16; d >= 2; d -= 0.5) { // the farthest spot in sight you could stand on
         const x = pl.x + dx * d, y = pl.y + dy * d;
         if (!dg.blocked(x, y, 0.3) && dg.los(pl.x, pl.y, x, y) && !dg.stairsAt(x, y)) { b = { x, y }; break; }
       }
       if (!b) return pl.tell('There is no room for a second portal that way.');
       for (const p of m.portals.filter(p => p.owner === pl)) p.until = 0; // one pair each
-      m.portals.push({ a: { x: pl.x, y: pl.y }, b, owner: pl, until: Date.now() + 12000 });
+      m.portals.push({ a: { x: pl.x, y: pl.y }, b, owner: pl, until: Date.now() + (m.duel ? 12 : FOREVER) * 1000 }); // in the dungeon they stay until you open a new pair
       pl.portalAt = Date.now() + 900; // do not fall straight into the portal under your own feet
       m.room.emit({ t: 'portalopen', x: pl.x, y: pl.y, x2: b.x, y2: b.y, c: pl.color });
     },
@@ -46,7 +48,7 @@ export const UTILITY = {
      */
     cast(m, c) {
       const { pl, dx, dy } = c, dg = m.room.dungeon, R = pl.radius || 0.3;
-      const reach = 8 * c.power;
+      const reach = (m.duel ? 12 : 30) * c.power; // the whole way across a dungeon room, and then some
       let crossed = false, to = null;
       for (let d = 0.25; d <= reach; d += 0.125) {
         const x = pl.x + dx * d, y = pl.y + dy * d;
@@ -70,7 +72,7 @@ export const UTILITY = {
   },
   clone: {
     cast(m, c) {
-      const g = c.pl.magic; g.clone = 3; g.cloneUntil = Date.now() + 12000;
+      const g = c.pl.magic; g.clone = 3; g.cloneUntil = Date.now() + (m.duel ? 12000 : 30000);
       m.room.emit({ t: 'buff', x: c.pl.x, y: c.pl.y, s: 'clone' });
     },
   },

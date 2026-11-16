@@ -17,6 +17,8 @@ function burnZone(m, z, now, letters, hp, every) {
 }
 const rot = (dx, dy, a) => [dx * Math.cos(a) - dy * Math.sin(a), dx * Math.sin(a) + dy * Math.cos(a)];
 
+const FOREVER = 24 * 3600; // seconds: 'permanent' (SPINA's traps in the dungeon)
+
 export const ELEMENTS = {
   fire: {
     cast: (m, c) => m.orb(c),
@@ -119,7 +121,7 @@ export const ELEMENTS = {
       const mine = m.zones.filter(z => z.kind === 'thorn' && z.owner === c.pl);
       if (mine.length >= 3) mine[0].until = 0; // only three traps at a time: the oldest goes
       if (foe) { x = foe.x; y = foe.y; }
-      m.zone('thorn', x, y, 0.7, 30, c.pl, { delay: foe ? 0 : 400 });
+      m.zone('thorn', x, y, 0.7, m.duel ? 30 : FOREVER, c.pl, { delay: foe ? 0 : 400, fixed: true }); // in the dungeon a trap waits until something steps on it
     },
     zone(m, z, now) {
       if (now < z.nextAt) return;
@@ -190,7 +192,7 @@ export const ELEMENTS = {
   },
   void: {
     cast: (m, c) => m.orb(c),
-    land: (m, c, x, y) => m.zone('void', x, y, 3.5, 3, c.pl, { power: c.power }),
+    land: (m, c, x, y) => m.zone('void', x, y, 3.5, 3, c.pl, { power: c.power, fixed: true }),
     zone(m, z) {
       for (const f of m.foes(z.owner)) { // drag foes in
         const vx = z.x - f.x, vy = z.y - f.y, d = Math.hypot(vx, vy);
