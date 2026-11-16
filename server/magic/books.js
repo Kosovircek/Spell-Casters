@@ -36,6 +36,7 @@ const RIDDLES = {
   wall:    ['I keep things in and keep things out, and I never take a step.', ['WALL']],
   invis:   ['I follow you all day, but at noon and at midnight I am gone.', ['SHADOW']],
   portal:  ['I have a handle but no hands. I let you in, and I let you out.', ['DOOR', 'GATE']],
+  phase:   ['Light goes through me as if I were not there, yet I am part of the wall.', ['WINDOW', 'GLASS']],
   clone:   ['Two of us, born on one day, as alike as two drops of rain.', ['TWINS', 'TWIN']],
   drain:   ['Taken from your veins, and the heart cannot live without me.', ['BLOOD']],
   slow:    ['I carry my house on my back and never hurry home.', ['SNAIL', 'TORTOISE', 'TURTLE']],

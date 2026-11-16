@@ -169,6 +169,7 @@ export class Game {
 
   onState(state) {
     this.world.applyState(state);
+    if (state.ev.some(e => e.t === 'phase' && e.id === this.myId)) this.prediction.reset(); // PERMEO: jump straight there, no sliding through the wall
     this.prediction.onServer(performance.now());
     const me = state.players.find(p => p.id === this.myId);
     if (me && me.stats) this.morse.maxLen = me.stats.letters; // some gear lets spells hold more letters

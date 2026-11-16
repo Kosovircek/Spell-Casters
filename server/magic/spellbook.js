@@ -76,6 +76,7 @@ export const SPELLS = [
   S('invis',   'UMBRA',  'utility',  12, 18, 16, 'Shadows',         'You turn invisible for 5 s: enemies cannot see you. Casting anything ends it.', 'Your foe sees only a shimmer, not what you type, and their spells do not home on you.'),
   S('drain',   'HAURIO', 'utility',  8,  16, 9,  'Thirst',          'An orb that takes two letters from the enemy it hits and heals you 3 HP for each.', 'Hits for 8 and heals you 8.'),
   S('portal',  'IANUA',  'utility',  14, 20, 14, 'Doors',           'Opens two linked portals for 12 s: one at your feet, one up to 8 tiles the way you aim. Casters, enemies and spells that step in come out of the other.'),
+  S('phase',   'PERMEO', 'utility',  9,  14, 8,  'Passages',        'Steps you through the wall in front of you: if there is open floor on the other side, up to 8 tiles the way you aim, you appear there. Works across lava, deep water and chasms too.', 'The same in the arena: a quick escape across a gap.'),
   S('clone',   'GEMINI', 'utility',  25, 28, 18, 'Twins',           'Your next three spells within 12 s are cast twice. The twin of an effect spell costs nothing.'),
   S('revive',  'ANIMA',  'utility',  5,  30, 30, 'Souls',           'Wakes every downed teammate within 6 tiles at 40% HP. With nobody down, it heals you and your teammates nearby for 25%.', 'Heals you 12.'),
 ];

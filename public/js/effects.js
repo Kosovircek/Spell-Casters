@@ -108,6 +108,7 @@ export class EventEffects {
       case 'crumble': for (const t of e.tiles || []) { const w = this.world?.map?.w; if (w) p.burst(t % w + 0.5, Math.floor(t / w) + 0.7, '#6a5a9a', 4, 25, 0.4); } break;
       case 'yank': sfx('cloak'); line(p, e, e.c, 10); break;
       case 'gust': sfx('cloak'); for (let k = 1; k <= 4; k++) p.burst(e.x + e.dx * k * 0.8, e.y + e.dy * k * 0.8, '#e0f7fa', 4, 50, 0.4); break;
+      case 'phase': sfx('stairs'); p.burst(e.x, e.y, e.c || '#ce93d8', 18, 40, 0.5); p.burst(e.x2, e.y2, e.c || '#ce93d8', 18, 40, 0.5); line(p, e, '#e1bee7', 8); break;
       case 'swap': sfx('stairs'); p.burst(e.x, e.y, '#ce93d8', 16, 40, 0.5); p.burst(e.x2, e.y2, '#ce93d8', 16, 40, 0.5); break;
       case 'mirror': sfx('block'); p.burst(e.x, e.y, '#e0f7fa', 18, 60, 0.5); p.text(e.x, e.y - 1, 'MIRROR', '#e0f7fa'); break;
       case 'buff': sfx('shield'); p.burst(e.x, e.y, STATUS[e.s] || '#ffffff', 16, 40, 0.6); break;

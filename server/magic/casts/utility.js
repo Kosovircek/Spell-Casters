@@ -39,6 +39,35 @@ export const UTILITY = {
       m.room.emit({ t: 'portalopen', x: pl.x, y: pl.y, x2: b.x, y2: b.y, c: pl.color });
     },
   },
+  phase: {
+    /**
+     * Walk a ray the way you aim: once it has passed through something you cannot stand on (a wall, lava, a chasm),
+     * the first spot on the far side where a caster fits is where you appear.
+     */
+    cast(m, c) {
+      const { pl, dx, dy } = c, dg = m.room.dungeon, R = pl.radius || 0.3;
+      const reach = 8 * c.power;
+      let crossed = false, to = null;
+      for (let d = 0.25; d <= reach; d += 0.125) {
+        const x = pl.x + dx * d, y = pl.y + dy * d;
+        if (dg.solid(x, y)) { crossed = true; continue; }
+        if (!crossed || dg.blocked(x, y, R) || dg.stairsAt(x, y)) continue;
+        to = { x, y };
+        for (let e = 0.125; e <= 0.5; e += 0.125) { // step a little further in, clear of the wall's edge
+          const nx = x + dx * e, ny = y + dy * e;
+          if (dg.blocked(nx, ny, R)) break;
+          to = { x: nx, y: ny };
+        }
+        break;
+      }
+      if (!crossed) return pl.tell('PERMEO needs a wall (or a gap) in front of you to pass through.');
+      if (!to) return pl.tell('There is no floor on the other side within reach.');
+      m.room.emit({ t: 'phase', x: pl.x, y: pl.y, x2: to.x, y2: to.y, id: pl.id, c: pl.color });
+      pl.x = to.x; pl.y = to.y;
+      if (pl.vel) pl.vel = { x: 0, y: 0 };
+      pl.safe = { x: to.x, y: to.y };
+    },
+  },
   clone: {
     cast(m, c) {
       const g = c.pl.magic; g.clone = 3; g.cloneUntil = Date.now() + 12000;

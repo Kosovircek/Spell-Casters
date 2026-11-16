@@ -272,6 +272,7 @@ Tap the rune **..--** first (a non-standard Morse sign, drawn as a glowing ✦),
 | UMBRA | invis | utility | 12 | 18 | 16s | You turn invisible for 5 s: enemies cannot see you. Casting anything ends it. |
 | HAURIO | drain | utility | 8 | 16 | 9s | An orb that takes two letters from the enemy it hits and heals you 3 HP for each. |
 | IANUA | portal | utility | 14 | 20 | 14s | Opens two linked portals for 12 s: one at your feet, one up to 8 tiles the way you aim. Casters, enemies and spells that step in come out of the other. |
+| PERMEO | phase | utility | 9 | 14 | 8s | Steps you through the wall in front of you: if there is open floor on the other side, up to 8 tiles the way you aim, you appear there. Works across lava, deep water and chasms too. |
 | GEMINI | clone | utility | 25 | 28 | 18s | Your next three spells within 12 s are cast twice. The twin of an effect spell costs nothing. |
 | ANIMA | revive | utility | 5 | 30 | 30s | Wakes every downed teammate within 6 tiles at 40% HP. With nobody down, it heals you and your teammates nearby for 25%. |
 
