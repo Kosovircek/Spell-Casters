@@ -2,6 +2,8 @@
 
 A co-op browser dungeon crawler (1 to 4 players) with a top-down 3/4 pixel-art look (you see the top and front of walls, no rotation). Every enemy has a letter or a word above it. You defeat it by casting those letters at it, and you cast by tapping Morse code.
 
+Developer documentation (architecture diagrams, code map, network protocol) is in [`docs/`](docs/README.md).
+
 ## Run it
 
 ```
@@ -392,62 +394,13 @@ A lobby (room) is saved on the server as `saves/<room>.json`: the current floor 
 
 Default speed is 7 WPM: a dot is about 170 ms and anything held longer than about 340 ms is a dash. A letter finishes after 3 dot lengths of silence (about 510 ms). Both are adjustable in settings and stored in the browser.
 
-## Code map
+## For developers
 
-Both halves use ES modules (`import`/`export`) and classes. The server is authoritative: it runs the
-simulation 20 times a second and sends snapshots; the client draws them and sends input.
+The code is documented in [`docs/`](docs/README.md):
 
-### Server (`server/`, Node)
-
-| File | What it holds |
-| --- | --- |
-| `index.js` | Entry point: starts the web server and the game server |
-| `StaticServer.js` | Serves the `public/` folder |
-| `GameServer.js` | **Networking**: WebSocket connections, rooms, routing messages (`join`, `move`, `cast`, `cmd`) |
-| `DuelRoom.js` | **The duel room** (each co-op room has one; `GameServer.enterArena` / `leaveArena` move a caster in and out on the same connection): `Arena` (the platform, a `Dungeon` subclass), `DuelPlayer`, `DuelSpell`, rounds and spell-vs-spell blocking |
-| `Room.js` | **One co-op game**: the party's casters, saves and shared progress (deepest floor, bestiary, mythics), keeps every visited floor (`levels`), runs one `Level` per floor someone is on (`live`) and moves single casters between floors (`movePlayer`: stairs, recall and descent scrolls) |
-| `Level.js` | **One floor being played**: its map, enemies, spells, chests, items and the casters on it; runs `tick()` (update entities, collisions, stairs, wipe), casting and targeting, broadcasts state to the casters on that floor |
-| `Town.js` | `Town`: the surface village (a fixed `Dungeon` subclass with the house, the shop, the duel arena, their doors, the zoo's pens, the practice yard, the fountain, lamp posts and the stairs down) |
-| `Critters.js` | Friendly surface things you cast at: `Critter` → `ZooAnimal`, `Dummy` (practice streaks), `Fountain` (heals, wishes for a ward); `townCritters` fills the zoo from `Room.bestiary` |
-| `Shop.js` | `Shop`: the shop's stock, buying, selling and its shelf of resold items, and every caster's house storage |
-| `bestiary.js` | **Every enemy kind in one table**: floors, speed, shots, damage, XP, gold, word lengths |
-| `monsters.js` | The 20 rare enemies and their tricks (`Mimic`, `Phantom`, `Gremlin`...) |
-| `bosses.js` | The five newer bosses: `Gravekeeper`, `Hydra`, `HourglassGolem`, `EchoQueen` (+ `EchoImage`), `SilentKing` |
-| `biomes/` | **The biomes**: `biomes.js` (the ten biomes, which floors, natives, bosses, spell power), `terrain.js` (decorates a generated floor: water, lava, ice walls, vines, rune doors, machinery, chasms and bridges, shrines and altars, always keeping every part reachable), `Environment.js` (one per floor: hazards on their beats, weather, crumbling bridges, wells and portals, what spells do to terrain, challenges, how enemies look in a blizzard or on a silent floor), `natives.js`, `biomeBosses.js`, `props.js` (braziers, riddle doors, shrines, altars), `modifiers.js` (curses and blessings), `riddles.js` |
-| `spawner.js` | Fills a floor with enemies, picks its boss, turns saved enemies back into objects (`FORCE_ENEMY`, `FORCE_BOSS` for testing) |
-| `entities.js` | **OOP game objects**: `Entity` → `Actor` → `Player`, `Enemy` (→ `Slime`, `Mage`, `Creature`, `Boss` → `Bellwraith`); `Chest`; `Spell` (→ `PlayerSpell`, `EnemySpell`); `FloorItem`; and `WordLock` (the spell-the-word rule shared by enemies and chests) |
-| `Dungeon.js` | Tile codes, map generation with stairs down and up, plus collision, line of sight and path finding |
-| `ItemCommands.js` | Angband item commands: quaff, read, wield, take off, drop, destroy, pick up |
-| `SaveStore.js` | Reads and writes lobby saves in `saves/`; entities, `Dungeon` and `Room` each have `toSave()` / `fromSave()` |
-| `items.js` | Item definitions (materials, bases, enchantments, mythic items, scrolls), prices, names, loot rolls, pack stacking |
-| `progression.js` | XP values, the level curve, enemy damage and armor, gold for kills and chests |
-| `words.js` | Letters and words per floor |
-| `config.js` | All tunable numbers (speeds, ranges, timings) |
-| `util.js` | Random helpers |
-
-### Client (`public/js/`, browser)
-
-| File | What it holds |
-| --- | --- |
-| `main.js` | Entry point: `new Game().start()` |
-| `game.js` | **`Game` class**: creates every part, handles server messages, runs the main loop (`update` then `render`) |
-| `entities.js` | **OOP drawable objects** mirroring the server: `Entity` → `Character` → `Player`, `Enemy` (→ `Slime`, `Mage`, `Creature` for every other kind and the new bosses, `Boss` for the Bellwraith); `Chest`; `Spell`; `FloorItem`. Each slides between server snapshots (drawn 100 ms in the past, so uneven Wi-Fi stays smooth) and draws itself |
-| `world.js` | `World`: the tile map and all entities, kept in sync with server snapshots |
-| `renderer.js` | `Renderer`: camera, tiles and walls, depth sorting, lighting, drawing helpers; `renderDuel` for the duel arena |
-| `network.js` | `Network`: WebSocket connection, `on(type, fn)` subscriptions, `move` / `cast` / `command`, ping (shown next to the room name) |
-| `prediction.js` | `Prediction`: your own caster walks at once on your device (same speed and walls as the server) and is nudged back if the server disagrees, so players on other machines feel no input delay |
-| `input.js` | `Input`: keyboard handling for Morse, aiming, walking, menus |
-| `morse.js` | `MorseKey`: dot/dash timing and decoding |
-| `hud.js` | `Hud`: party panel, Morse box, banner, cheat sheet, message line |
-| `inventory.js` | `InventoryMenu`: the Angband-style inventory, equipment and character sheet popup |
-| `store.js` | `StoreMenu`: the shop and house screens on the surface (opened by walking up to their doors) |
-| `bell.js` | `BellChant`: plays the Bellwraith's bell letter in Morse (flashes and tone) |
-| `effects.js` | `EventEffects`: turns server events into sounds and particles |
-| `envfx.js` | The biomes on screen: erupting vents, machinery warnings, gravity wells, portals, biome lights, and the weather (rain and gusts, snow and blizzards, embers, lightning flashes) |
-| `particles.js` | `Particles`: sparks and floating text |
-| `audio.js` | `AudioManager`: Morse tone and sound effects |
-| `music.js` | `Music`: generative ambient music that follows `Game.danger()` |
-| `settings.js` | `Settings`: saved preferences and the Esc panel |
-| `lobby.js` | `Lobby`: name and room screen |
-| `constants.js` | Screen size, key maps, small helpers |
-| `art/` | Procedural pixel art: `canvas.js` (helpers), `font.js`, `sprites.js`, `tiles.js` (dungeon, stairs up and down, and the village's grass, paths, trees, buildings and duel arena), `arena.js` (the duel platform and starry sky), `critters.js` (zoo animals, the practice dummy, fences and lamp posts), `monsters.js` (every enemy beyond the slime and mage, and the new bosses), `biomes.js` (each biome's floor, wall and stairs tiles, the special tiles such as water, lava, ice, vines and bridges, and how dark each biome is), `biomeMonsters.js` (the natives and biome bosses) |
+- [Architecture](docs/architecture.md): diagrams of the server and client, the 20 Hz tick, the life of a spell, floors
+- [Code map](docs/code-map.md): every file in `server/` and `public/js/` and what it holds
+- [Network protocol](docs/network-protocol.md): every WebSocket message and field, events, prediction and interpolation
+- [Game systems](docs/game-systems.md): Morse input, word locks, aiming, blocking, enemies, floors, biomes, effect spells, the duel
+- [Save format](docs/save-format.md): what a lobby save holds and how old saves are migrated
+- [How to extend it](docs/how-to.md): add an enemy, boss, effect spell, item, biome, tile or network message; testing switches
