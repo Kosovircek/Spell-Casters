@@ -96,7 +96,7 @@ export class InventoryMenu {
       if (k === 'y' || k === 'n' || k === 'Enter') { this.network.command('read', { i: ui.ask.idx, here: k === 'y' }); this.close(); }
       return true;
     }
-    if (ui.sheet) { if (k === 'C') return true; if (k === 'i' || k === 'e') this.open(k === 'i' ? 'pack' : 'equip'); else this.close(); return true; }
+    if (ui.sheet) { if (k === 'C') return true; if (k === 'i' || k === 'tab:pack') this.open('pack'); else if (k === 'e' || k === 'tab:equip') this.open('equip'); else this.close(); return true; }
     if (k === 'C') { this.openSheet(); return true; }
     if (ui.item) {
       const v = KEY_TO_VERB[k];
@@ -104,7 +104,9 @@ export class InventoryMenu {
       return true;
     }
     if (k === '/') { ui.view = ui.view === 'pack' ? 'equip' : 'pack'; if (ui.verb && VERBS[ui.verb].from) ui.verb = null; this.render(); return true; }
-    if (!ui.verb && (k === 'i' || k === 'e')) { ui.view = k === 'i' ? 'pack' : 'equip'; this.render(); return true; }
+    if (k === 'tab:pack' || k === 'tab:equip') { ui.view = k.slice(4); ui.verb = null; this.render(); return true; } // touch tabs
+    // An item's letter comes first: e and i only switch lists when no item sits under that letter
+    // (the 5th and 9th pack items have those letters).
     if (/^[a-l]$/.test(k)) {
       const ent = this.entries(ui.view).find(x => x.key === k);
       if (ent && ent.it) {
@@ -113,6 +115,7 @@ export class InventoryMenu {
         return true;
       }
     }
+    if (!ui.verb && (k === 'i' || k === 'e')) { ui.view = k === 'i' ? 'pack' : 'equip'; this.render(); return true; }
     if (!ui.verb && KEY_TO_VERB[k]) {
       const v = KEY_TO_VERB[k];
       if (v === 'takeoff') { this.ui = { view: 'equip', verb: v }; this.render(); }
@@ -198,7 +201,7 @@ export class InventoryMenu {
   }
   touchTabs(view) {
     const tab = (k, label, on) => `<span class="tab${on ? ' on' : ''}" data-k="${k}">${label}</span>`;
-    return `<div class="tabs">${tab('i', 'Pack', view === 'pack')}${tab('e', 'Equipment', view === 'equip')}${tab('C', 'Stats', view === 'sheet')}</div>`;
+    return `<div class="tabs">${tab('tab:pack', 'Pack', view === 'pack')}${tab('tab:equip', 'Equipment', view === 'equip')}${tab('C', 'Stats', view === 'sheet')}</div>`;
   }
   /** Character sheet: everything your level and gear add up to. */
   renderSheet() {
