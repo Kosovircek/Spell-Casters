@@ -28,7 +28,7 @@ export class Room {
     this.savedPlayers = {};   // lowercase name -> saved progress of players who are not here right now
     this.live = new Map();    // floor number -> Level, for every floor someone is standing on
     this.levels = {};         // floor number -> saved layout, chests, items and cleared flag of floors nobody is on
-    this.maxDepth = 0;        // deepest floor anyone has reached (a Scroll of Recall read on the surface goes there)
+    this.maxDepth = 0;        // deepest floor anyone has reached (older saves give it to every caster as their recall depth)
     this.foundMythics = new Set(); // mythic items drop at most once per game (like Angband artifacts)
     this.foundBooks = new Set();   // spells whose books have dropped: new drops prefer the others
     this.bestiary = {};       // enemy type -> how many the party has defeated; each kind met moves into the zoo
@@ -151,6 +151,7 @@ export class Room {
     lv.enter(pl, !saved && buddy && buddy.floor === floor ? { x: buddy.x, y: buddy.y } : null);
     if (saved) { // a returning player gets their level, gear, HP and position back
       pl.restore(saved);
+      if (!Number.isFinite(saved.deepest)) pl.deepest = pl.recallDepth = Math.max(pl.floor, this.maxDepth); // older saves: the party's deepest floor
       if (!Number.isFinite(saved.x) || lv.dungeon.blocked(pl.x, pl.y, pl.radius)) { pl.placeAt(lv); pl.restore({ ...saved, x: pl.x, y: pl.y }); }
       delete this.savedPlayers[pl.name.toLowerCase()];
     }

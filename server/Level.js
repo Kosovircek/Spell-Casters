@@ -120,6 +120,7 @@ export class Level {
   enter(pl, at = null) {
     this.players.set(pl.id, pl);
     pl.floor = this.floor;
+    if (this.floor > pl.deepest) pl.deepest = pl.recallDepth = this.floor; // like Angband: going deeper moves your recall depth along
     pl.placeAt(this, at);
     pl.safe = { x: pl.x, y: pl.y };
     pl.send(this.mapMessage());
@@ -174,11 +175,20 @@ export class Level {
     if (to === this.floor) return this.town ? 'You have not been down into the dungeon yet, so the scroll has nowhere to take you.' : `You are already on floor ${to}.`;
     return null;
   }
-  startTravel(pl, to) {
-    pl.travel = { at: Date.now() + EFFECTS.travelSeconds * 1000, to };
+  /** kind: 'recall', 'deep' (Deep Descent) or 'descent' (the fixed-floor scrolls). Deep Descent is quicker than the others. */
+  startTravel(pl, to, kind = 'descent') {
+    const secs = kind === 'deep' ? EFFECTS.deepDescentSeconds : EFFECTS.travelSeconds;
+    pl.travel = { at: Date.now() + secs * 1000, to, kind };
     const where = to === 0 ? 'up to the surface' : `to floor ${to}`;
     this.say(`${pl.name} reads a scroll and will be carried ${where}...`, 3);
-    pl.tell(`The air starts to hum. In ${EFFECTS.travelSeconds} seconds you are carried ${where}.`);
+    pl.tell(kind === 'deep' ? `The floor opens beneath you. In ${secs} seconds you sink ${where}.` : `The air starts to hum. In ${secs} seconds you are carried ${where}.`);
+    this.emit({ t: 'travel', x: pl.x, y: pl.y });
+  }
+  /** Reading Word of Recall again while it hums calls it off, as in Angband (the scroll is still used up). */
+  cancelTravel(pl) {
+    pl.travel = null;
+    pl.tell('A tension leaves the air around you. You stay where you are.');
+    this.say(`${pl.name} calls off the recall`, 2);
     this.emit({ t: 'travel', x: pl.x, y: pl.y });
   }
 

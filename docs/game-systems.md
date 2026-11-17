@@ -105,9 +105,18 @@ flowchart TB
   F2 --> F3["Floor 3<br/>biome boss"]
   F3 --> F4["Floor 4: next biome"]
   F1 -. "stairs up" .-> T
-  F3 -. "Scroll of Recall<br/>(5 s)" .-> T
-  T -. "Recall: to maxDepth" .-> F3
+  F3 -. "Word of Recall<br/>(5 s)" .-> T
+  T -. "Recall: to your recall depth" .-> F3
+  F1 -. "Deep Descent<br/>(3 s, 5 floors down)" .-> F6["Floor 6"]
 ```
+
+- **Travel scrolls** (`ItemCommands.readTravel`, `Level.startTravel`): `pl.travel = { at, to, kind }` and the
+  floor's tick moves the caster when `at` passes. Word of Recall goes to 0 from the dungeon and to
+  `pl.recallDepth` from the surface. `Level.enter` raises `pl.deepest` and `pl.recallDepth` together when a
+  caster goes deeper than ever; the client asks "set recall depth here?" (`InventoryMenu.renderAsk`) when Recall
+  is read above it and sends `read` with `here: true`. Reading Recall while one hums cancels it
+  (`Level.cancelTravel`). Deep Descent goes `EFFECTS.deepDescentFloors` below the current floor after
+  `EFFECTS.deepDescentSeconds`. Older saves give every caster the party's `maxDepth` as both values.
 
 - **Persistence** (`Room.levels`): a floor keeps its layout, chests and items forever. Enemies are not kept when
   a floor is put away; it gets new ones when someone arrives on an empty floor. A cleared floor stays cleared

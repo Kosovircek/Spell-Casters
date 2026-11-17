@@ -81,13 +81,20 @@ A new game starts on **the surface**, a small village above the dungeon with you
 | --- | --- | --- |
 | Potion of Healing / Speed / Warding | 25 / 40 / 40 | As below |
 | Scroll of Teleportation / Slow Time / Resurrection | 40 / 50 / 200 | As below |
-| Scroll of Recall | 125 | After 5 seconds you are pulled up to the surface. Read on the surface, it takes you down to the deepest floor the party has reached |
+| Scroll of Word of Recall | 125 | After 5 seconds you are pulled up to the surface. Read on the surface, it takes you down to **your recall depth** (see below) |
+| Scroll of Deep Descent | 150 | After 3 seconds you sink 5 floors below the one you stand on (from the surface: floor 5) |
 | Scroll of Descent to Floor 10 / 20 / 30 / 40 / 50 | 400 / 1000 / 2000 / 3500 / 5000 | After 5 seconds you go straight to that floor |
 | Bronze / Iron weapons and armour | 40 / 120 (mail 60 / 180) | Plain common gear; a shop shield blocks one random common letter |
 
 Every letter your shields block circles you as a small glowing letter, so you and the party can see your wards at a glance. When one of them stops a spell, it flashes white.
 
-A travel scroll that would do nothing (Recall on the surface before anyone has been down, or a descent to the floor you are on) is not used up. Chests can also hold a Scroll of Recall now and then.
+Travel scrolls work like Angband's, and only ever move the caster who reads them:
+
+- **Recall depth.** Every caster has their own: the deepest floor *they* have reached. Going deeper moves it along. Read Word of Recall on a floor above your recall depth and you are asked *Set your recall depth to floor N?*: say **y** to make recall bring you back here instead (handy when the deep floors are too hard), **n** to keep the old one. The character sheet (`C`) shows your deepest floor and recall depth.
+- **Changing your mind.** Read another Word of Recall while the first one hums and it is called off (the second scroll is used up).
+- **Deep Descent** is the quick way down when you are strong enough: five floors below wherever you stand, in 3 seconds. Your recall depth follows if that is the deepest you have been.
+
+A travel scroll that would do nothing (Recall on the surface before you have been down, or a descent to the floor you are on) is not used up. Chests can also hold a Scroll of Word of Recall or Deep Descent now and then.
 
 ## Levels, HP and damage
 
@@ -318,7 +325,7 @@ Every floor has 2 to 4 chests with a gold word above them; one is always in the 
 Numpad Morse and aiming keep working while a menu is open. The game does not pause.
 
 **Potions** (quaff): Healing (30% of max HP), Speed (+50% run speed for 30s), Warding (absorbs the next 2 hits).
-**Scrolls** (read): Slow Time (enemy spells at 40% speed for 15s), Teleportation (random room), Resurrection (revives downed teammates on your floor at half HP, heals them 20%), Recall and Descent (see *The surface and persistent floors*).
+**Scrolls** (read): Slow Time (enemy spells at 40% speed for 15s), Teleportation (random room), Resurrection (revives downed teammates on your floor at half HP, heals them 20%), Word of Recall, Deep Descent and Descent to Floor N (see *The surface and persistent floors*).
 
 Every piece of gear needs a minimum level. You can carry gear above your level; it shows "(needs Lv N)" in red until you get there. There are eight slots: weapon, shield, ring, amulet, head, body, cloak, feet.
 

@@ -49,7 +49,7 @@ sequenceDiagram
 
 | `c` | Arguments | What it does |
 | --- | --- | --- |
-| `quaff`, `read`, `wield`, `drop`, `destroy` | `i`: pack index (0 = a) | Use, wear or drop a pack item. Reading a spellbook opens a puzzle (`puzzle` reply) |
+| `quaff`, `read`, `wield`, `drop`, `destroy` | `i`: pack index (0 = a); `read` also `here: true` | Use, wear or drop a pack item. Reading a spellbook opens a puzzle (`puzzle` reply). `here` on Word of Recall sets your recall depth to this floor first |
 | `takeoff` | `slot`: equipment slot (`weapon`, `shield`, `ring`, `neck`, `head`, `body`, `cloak`, `feet`) | Back to the pack |
 | `pickup` | none | Pick up everything within 0.8 tiles |
 | `solve` | `a`: the answer text | Answer the open spellbook puzzle: `learned` or `puzzleWrong` |
@@ -119,11 +119,11 @@ the end of the shared string.
 | `magic` | Effect spells on the floor, or `null`: `z` zones `[{ id, k, x, y, r, c, pid, t, tiles? }]`, `mk` marks (warnings) `[{ k, x, y, x2?, y2?, r, f }]` where `f` is 0..1 progress, `w` rune-wall tile indexes, `pt` portals `[{ x, y, x2, y2, c, t }]` |
 | `env` | The biome's moving parts, or `null`: `w` closed machinery tiles, `h` crumbled bridge holes, `cr` crumbling tiles, `hot` / `warm` vents, `up` blades up, `warn` tiles about to move, `slow` slowed machinery, `wind` `[x, y]`, `bliz` blizzard, `ch` challenge `{ k, left, t }` |
 | `duel` | Arena only: `{ phase, round, need, winner, count }` |
-| `travel` | Only for the caster reading a travel scroll: `{ to, secs }` |
+| `travel` | Only for the caster reading a travel scroll: `{ to, secs }` (your own player also has `trv`: `'recall'`, `'deep'` or `'descent'`) |
 | `ev` | This tick's events (see [events](#events)) |
 
 **Player** (`Player.snapshot`): `id x y name color hp maxHp dead spd lv xp xpNext hurt respawn kills blocks hidden off?
-gold swift ward frozen`, `ty` (`{ s, b, k }` while typing and not concealed), `mana maxMana cd clone` (from the
+gold swift ward frozen`, `fl deep recall trv?` (floor, deepest floor, recall depth, travel scroll humming), `ty` (`{ s, b, k }` while typing and not concealed), `mana maxMana cd clone` (from the
 grimoire), `st` (status list, e.g. `lit`, `confuse`, `mirror`), `conc` (concealed), `stats` (`armor cut speed luck
 letters haste reach stagger echo wordHeal blocks fx`), `pack` and `equip` (items as `items.toClient`). In the arena
 also `side`, `wins` and `still` (true during the countdown).

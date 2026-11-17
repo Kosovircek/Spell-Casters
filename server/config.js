@@ -48,7 +48,9 @@ export const EFFECTS = {
   slowSeconds: 15,      // Scroll of Slow Time
   cloakRange: 4,        // tiles at which a cloak counters an incoming letter
   regenSeconds: 20,     // Amulet of Regeneration
-  travelSeconds: 5,     // Scroll of Recall and the descent scrolls: the party is carried away after this long
+  travelSeconds: 5,     // Word of Recall and the fixed-floor descent scrolls: the reader is carried away after this long
+  deepDescentSeconds: 3, // Deep Descent: the reader sinks after this long
+  deepDescentFloors: 5,  // Deep Descent: how many floors below the one you stand on
 };
 
 /** Floors deeper down get harder, but some numbers stop growing so a deep floor is not wall-to-wall enemies. */

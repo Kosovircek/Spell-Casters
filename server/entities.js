@@ -109,7 +109,9 @@ export class Player extends Actor {
     this.color = color;
     this.mx = 0; this.my = 0;           // movement input, -1..1
     this.floor = 0;                     // which floor this caster is exploring (0 is the surface)
-    this.travel = null;                 // { at, to } a recall or descent scroll about to carry this caster away
+    this.travel = null;                 // { at, to, kind } a recall or descent scroll about to carry this caster away
+    this.deepest = 0;                   // deepest floor this caster has reached
+    this.recallDepth = 0;               // where Word of Recall read on the surface takes this caster (Angband's recall depth)
     this.level = 1; this.xp = 0;
     this.dead = false; this.respawnAt = 0;
     this.kills = 0; this.blocks = 0;
@@ -341,7 +343,7 @@ export class Player extends Actor {
 
   // ---- saving: what a player keeps when the lobby is saved and resumed
   toSave() {
-    return { name: this.name, floor: this.floor, x: this.x, y: this.y, hp: this.hp, dead: this.dead, level: this.level, xp: this.xp, kills: this.kills, blocks: this.blocks, ward: this.ward, gold: this.gold, pack: this.pack, home: this.home, equip: this.equip, practiceBest: this.practiceBest, magic: this.magic.toSave() };
+    return { name: this.name, floor: this.floor, x: this.x, y: this.y, hp: this.hp, dead: this.dead, level: this.level, xp: this.xp, kills: this.kills, blocks: this.blocks, ward: this.ward, gold: this.gold, pack: this.pack, home: this.home, equip: this.equip, practiceBest: this.practiceBest, deepest: this.deepest, recallDepth: this.recallDepth, magic: this.magic.toSave() };
   }
   /** Take back saved progress (matched by name when someone rejoins). Saves from before levelling start at level 1. */
   restore(s) {
@@ -356,6 +358,10 @@ export class Player extends Actor {
       const d = Items.info(it);
       if (d.level <= this.level && !this.equip[d.slot]) this.equip[d.slot] = it;
       else Items.addToPack(this.pack, it); // gear above your level waits in the pack
+    }
+    if (Number.isFinite(s.deepest)) { // saves from before per-caster recall get theirs from the party (Room.addPlayer)
+      this.deepest = Math.max(0, s.deepest | 0, this.floor);
+      this.recallDepth = Math.max(1, Math.min(this.deepest, s.recallDepth | 0 || this.deepest));
     }
     this.kills = s.kills | 0; this.blocks = s.blocks | 0; this.ward = s.ward | 0; this.practiceBest = s.practiceBest | 0;
     if (Number.isFinite(s.x) && Number.isFinite(s.y)) { this.x = s.x; this.y = s.y; }
@@ -373,6 +379,7 @@ export class Player extends Actor {
       lv: this.level, xp: this.xp, xpNext: this.level >= LEVELS.max ? 0 : xpToNext(this.level),
       hurt: this.hurt > 0, respawn: this.dead ? Math.max(0, Math.ceil((this.respawnAt - now) / 1000)) : 0,
       kills: this.kills, blocks: this.blocks, hidden: this.vanishUntil > now, gold: this.gold, ...(this.away ? { off: true } : {}),
+      fl: this.floor, deep: this.deepest, recall: this.recallDepth, ...(this.travel ? { trv: this.travel.kind } : {}),
       swift: this.swiftUntil > now ? Math.ceil((this.swiftUntil - now) / 1000) : 0, ward: this.ward, frozen: this.frozenUntil > now,
       // what I am typing, left out while idle (and while fog or invisibility hides me; my own screen has it anyway)
       ...((this.typing.s || this.typing.b || this.typing.k) && !this.concealed ? { ty: this.typing } : {}),

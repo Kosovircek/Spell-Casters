@@ -75,6 +75,11 @@ export class InventoryMenu {
   openSheet() { this.ui = { sheet: true }; this.render(); }
   run(verb, ref, it) {
     if (verb === 'inspect') { this.ui = { inspect: it }; return this.render(); }
+    const me = this.getMe();
+    if (verb === 'read' && it.kind === 'scr_recall' && me && me.fl > 0 && me.fl < me.recall && !me.trv) {
+      this.ui = { ask: { idx: ref.idx, floor: me.fl, recall: me.recall } }; // Angband: "Set recall depth to current depth?"
+      return this.render();
+    }
     if (verb === 'takeoff') this.network.command('takeoff', { slot: ref.slot });
     else this.network.command(verb, { i: ref.idx });
     this.close();
@@ -87,6 +92,10 @@ export class InventoryMenu {
     if (!ui) return this.handleClosedKey(k);
     if (k === 'Escape') { if (ui.item) { this.ui = { view: ui.view, verb: ui.verb }; this.render(); } else this.close(); return true; }
     if (ui.inspect) { this.close(); return true; }
+    if (ui.ask) {
+      if (k === 'y' || k === 'n' || k === 'Enter') { this.network.command('read', { i: ui.ask.idx, here: k === 'y' }); this.close(); }
+      return true;
+    }
     if (ui.sheet) { if (k === 'C') return true; if (k === 'i' || k === 'e') this.open(k === 'i' ? 'pack' : 'equip'); else this.close(); return true; }
     if (k === 'C') { this.openSheet(); return true; }
     if (ui.item) {
@@ -144,6 +153,7 @@ export class InventoryMenu {
     if (!ui) { el.hidden = true; this.setHtml(''); return; }
     el.hidden = false;
     if (ui.inspect) return this.renderInspect(ui.inspect);
+    if (ui.ask) return this.renderAsk(ui.ask);
     if (ui.sheet) return this.renderSheet();
     if (ui.item) return this.renderItemMenu(ui.item);
     const me = this.getMe();
@@ -172,6 +182,14 @@ export class InventoryMenu {
     if (this.touchMode) { this.setHtml(this.touchHead(escapeHtml(cap(it.name)), true) + verbs); return; }
     this.setHtml(`<div class="mh">${escapeHtml(cap(it.name))}:</div>` + verbs + `<div class="mf">ESC to go back</div>`);
   }
+  /** Word of Recall read above your recall depth: make this floor the new one? */
+  renderAsk({ floor, recall }) {
+    const q = `Set your recall depth to floor ${floor}? It is floor ${recall} now.`;
+    const rows = `<div class="row" data-k="y"><span class="mk">y)</span> Yes, recall brings me back to floor ${floor}</div>` +
+      `<div class="row" data-k="n"><span class="mk">n)</span> No, keep floor ${recall}</div>`;
+    if (this.touchMode) { this.setHtml(this.touchHead('Word of Recall', false) + `<p>${q}</p>` + rows); return; }
+    this.setHtml(`<div class="mh">Word of Recall</div><p>${q}</p>${rows}<div class="mf">y / n · ESC cancels (the scroll is kept)</div>`);
+  }
   renderInspect(it) {
     const how = it.type === 'gear' ? `It is worn on the ${SLOT_NAMES[it.slot].toLowerCase()} slot.` : it.type === 'potion' ? 'Quaff it with q.' : it.type === 'book' ? 'Read it with r to open its puzzle. G shows your grimoire.' : 'Read it with r.';
     const body = `<p>${escapeHtml(it.desc)}</p>`;
@@ -195,6 +213,8 @@ export class InventoryMenu {
       row('Speed', `${st.speed}%`),
       row('Luck', st.luck),
       row('Gold', me.gold ?? 0),
+      row('Deepest floor', me.deep || 'none yet'),
+      row('Recall depth', me.recall ? `floor ${me.recall}` : 'none yet'),
     ];
     const extra = [];
     if (st.letters !== 8) extra.push(row('Spell length', `${st.letters} letters`));

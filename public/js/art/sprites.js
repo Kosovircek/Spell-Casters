@@ -122,6 +122,7 @@ const ITEM_COLORS = {
   cloak_ward: '#7e57c2', robe_vit: '#c62828', hat_insight: '#ffd54f', boots_speed: '#8d6e63',
   ring_reflect: '#e0e0e0', amulet_regen: '#e91e63', staff_fork: '#aed581', staff_haste: '#4fc3f7',
   circlet: '#fff59d',
+  scr_recall: '#ce93d8', scr_deep: '#ff8a65',
 };
 /** color: the server's colour for the item (its material, or gold for mythic gear). */
 export function itemSprite(kind, type, slot, color = null) {
