@@ -77,7 +77,7 @@ export class Hud {
     if (line !== null) this.setHtml($('floor'), escapeHtml(line));
     else this.setHtml($('floor'), this.floorHtml(state, travel));
     this.setHtml($('party'), state.players.map(p =>
-      `<div class="pl" style="border-color:${p.color}"><b style="color:${p.color}">${escapeHtml(p.name)}${p.id === myId ? ' (you)' : ''}</b>` +
+      `<div class="pl" style="border-color:${p.color}"><b style="color:${p.color}">${escapeHtml(p.name)}${p.id === myId ? ' (you)' : ''}</b>` + (p.off ? ' <span class="lv">reconnecting...</span>' : '') +
       (duel ? '' : ` <span class="lv">Lv ${p.lv}</span>`) +
       this.barsHtml(p, p.id === myId && !duel, duel) +
       (duel ? `<div class="stats">${p.wins} round${p.wins === 1 ? '' : 's'} won · ${p.blocks} letters blocked</div>`

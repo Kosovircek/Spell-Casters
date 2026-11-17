@@ -57,6 +57,7 @@ export class TouchInput {
   /** Called when entering the dungeon: go full screen and hold landscape where the browser allows it. */
   async goFullscreen() {
     if (!this.enabled) return;
+    this.wantFullscreen = true;
     try { await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }); } catch {}
     try { await screen.orientation?.lock?.('landscape'); } catch {}
   }
@@ -69,6 +70,8 @@ export class TouchInput {
   onStart(e) {
     e.preventDefault();
     if (!this.game.isPlaying()) return;
+    // Switching apps drops full screen and the landscape lock; the next touch (a user gesture) takes them back.
+    if (this.wantFullscreen && document.fullscreenEnabled && !document.fullscreenElement) this.goFullscreen();
     const ring = this.game.ring;
     for (const t of e.changedTouches) {
       // While the ring is open, a touch anywhere off the ring just closes it.

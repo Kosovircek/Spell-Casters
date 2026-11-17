@@ -122,6 +122,7 @@ export class Player extends Actor {
     this.peltAt = 0;                    // Nemean Lion Pelt: next time it can stop a hit
     this.vanishUntil = 0;               // Ring of Gyges
     this.typing = { s: '', b: '', k: false }; // the spell being typed: finished letters, Morse of the next one, key held
+    this.away = false;                  // the connection dropped; the caster waits for it to come back
     this.pearlUsed = false;             // Pearl of the Dragon King, once per floor
     this.draupnir = 0;                  // kills counted toward Draupnir's potion
     this.trail = [];                    // Horseshoes of Sleipnir: recent footsteps
@@ -212,7 +213,7 @@ export class Player extends Actor {
   get reach() { return 1 + this.stats.reach; }
   /** Can enemies see me from this far away? (Helm of Hades, Ring of Gyges) */
   visibleFrom(d, now) {
-    if (this.vanishUntil > now || this.concealed) return false;
+    if (this.away || this.vanishUntil > now || this.concealed) return false; // nobody hunts a caster whose connection dropped
     return d < (this.has('hidden') ? 5 : 10);
   }
 
@@ -371,7 +372,7 @@ export class Player extends Actor {
       spd: round3(this.moveSpeed), // so the client can move its own caster straight away (prediction)
       lv: this.level, xp: this.xp, xpNext: this.level >= LEVELS.max ? 0 : xpToNext(this.level),
       hurt: this.hurt > 0, respawn: this.dead ? Math.max(0, Math.ceil((this.respawnAt - now) / 1000)) : 0,
-      kills: this.kills, blocks: this.blocks, hidden: this.vanishUntil > now, gold: this.gold,
+      kills: this.kills, blocks: this.blocks, hidden: this.vanishUntil > now, gold: this.gold, ...(this.away ? { off: true } : {}),
       swift: this.swiftUntil > now ? Math.ceil((this.swiftUntil - now) / 1000) : 0, ward: this.ward, frozen: this.frozenUntil > now,
       // what I am typing, left out while idle (and while fog or invisibility hides me; my own screen has it anyway)
       ...((this.typing.s || this.typing.b || this.typing.k) && !this.concealed ? { ty: this.typing } : {}),

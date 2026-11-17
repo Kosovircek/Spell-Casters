@@ -178,6 +178,12 @@ export class DuelRoom {
     else { this.phase = 'waiting'; this.say('Waiting for an opponent from your party...', 4); }
     return pl;
   }
+  /** A duellist whose connection dropped is back on a new socket. */
+  resume(pl) {
+    pl.send({ t: 'welcome', id: pl.id, room: this.code, duel: true, resumed: true });
+    pl.send(this.dungeon.toMessage());
+    pl.sendGrimoire();
+  }
   removePlayer(pl) {
     this.players.delete(pl.id);
     if (this.players.size === 0) { this.stop(); this.onEmpty(this); return; }

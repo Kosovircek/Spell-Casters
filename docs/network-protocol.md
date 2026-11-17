@@ -34,7 +34,9 @@ sequenceDiagram
 
 | `t` | Fields | When | Server side |
 | --- | --- | --- | --- |
-| `join` | `name` (string, cut to 12 chars), `room` (lowercased, `[a-z0-9-]`, max 20, default `lobby`) | Once, right after the socket opens | `GameServer.roomFor(room)`, then `Room.addPlayer`. Answers `full` and closes if the room has 4 casters (2 in the arena). Ignored after the first |
+| `join` | `name` (string, cut to 12 chars), `room` (lowercased, `[a-z0-9-]`, max 20, default `lobby`) | Once, right after the socket opens | `GameServer.roomFor(room)`, then `Room.addPlayer`, and a `session` reply. If a caster with that name in that room has a dropped connection (a reloaded page), the socket takes that caster over instead, like `resume`. Answers `full` and closes if the room has 4 casters (2 in the arena). Ignored after the first |
+| `resume` | `token` (from `session`) | Instead of `join`, on a new socket after the old one dropped | `GameServer.resume`: the socket takes over the caster, who is still in the game, and gets `session`, `welcome` (with `resumed`), `map` and `grimoire` for the room they are in now (co-op or arena). Unknown or expired token: `resumeFailed`, and the client sends `join` |
+| `leave` | none | Leaving from the Esc menu, just before the socket closes | `GameServer.leave`: the caster leaves at once (`Room.removePlayer`, saved) instead of waiting out the grace period |
 | `ping` | `c` (client `performance.now()`) | Every second | Echoed as `pong` with the same `c`. Works before `join` too |
 | `move` | `x`, `y` (unit direction, each clamped to -1..1; `0,0` = stop) | Only when the walking direction changes | `Player.setMoveInput` |
 | `type` | `s` finished letters (A-Z, an optional leading `*` rune, max 14), `b` Morse of the letter in progress (`.`/`-`, max 5), `k` key held | On every change of the Morse box | `Player.setTyping`; shown to others as `ty` in the player snapshot; makes noise on silent floors |
@@ -64,7 +66,9 @@ Every shop command checks that the caster still stands in the right door (`Town.
 
 | `t` | Fields | When |
 | --- | --- | --- |
-| `welcome` | `id` (your player id), `room`, `duel` (true in the arena) | On join, and again on every `goto` (new room, same socket). The client resets its spell, menus and walking |
+| `welcome` | `id` (your player id), `room`, `duel` (true in the arena), `resumed` (true after a `resume`) | On join, and again on every `goto` (new room, same socket). The client resets its spell, menus and walking (after a resume it only stops walking and resends its spell) |
+| `session` | `token` (32 hex chars) | After a join or a resume. The client keeps it to `resume` this caster on a new socket |
+| `resumeFailed` | none | The `resume` token is unknown or its grace period ran out; the client joins afresh by name (and gets its saved gear back) |
 | `full` | `max` | The room is full; the socket is closed |
 | `map` | see [below](#map) | Entering a floor, after a wipe, when a zoo pen opens |
 | `state` | see [below](#state) | Every tick (20/s) to every caster on the floor |
@@ -118,7 +122,7 @@ the end of the shared string.
 | `travel` | Only for the caster reading a travel scroll: `{ to, secs }` |
 | `ev` | This tick's events (see [events](#events)) |
 
-**Player** (`Player.snapshot`): `id x y name color hp maxHp dead spd lv xp xpNext hurt respawn kills blocks hidden
+**Player** (`Player.snapshot`): `id x y name color hp maxHp dead spd lv xp xpNext hurt respawn kills blocks hidden off?
 gold swift ward frozen`, `ty` (`{ s, b, k }` while typing and not concealed), `mana maxMana cd clone` (from the
 grimoire), `st` (status list, e.g. `lit`, `confuse`, `mirror`), `conc` (concealed), `stats` (`armor cut speed luck
 letters haste reach stagger echo wordHeal blocks fx`), `pack` and `equip` (items as `items.toClient`). In the arena
@@ -207,3 +211,18 @@ name. Prediction uses it to find the matching past position.
 ## Adding a message
 
 See [How to extend it](how-to.md#add-a-network-message).
+
+## Dropped connections
+
+Phones often lose the socket when the browser goes into the background or the screen turns. Nobody has to refresh:
+
+- **Server** (`GameServer`): every caster has a session `{ token, ws, room, player }`. When its socket closes without a
+  `leave`, the caster stays in the game for `RECONNECT.graceMs` (3 minutes, env `RECONNECT_GRACE_MS`): standing
+  still, spell cleared, unseen by enemies (`Player.away`, shown to others as `off` and "reconnecting..." in the party
+  panel). After that `Room.removePlayer` saves and removes them as usual. The server pings every socket every
+  `RECONNECT.heartbeatMs` (15 s) and terminates one that did not answer, so a phone that vanished starts its grace
+  period instead of holding its slot forever.
+- **Client** (`Network`): when the socket closes it shows "Connection lost. Reconnecting..." and opens a new one
+  (0.3 s, doubling up to 5 s), sending `resume` with the token. It reconnects at once when the page becomes visible
+  again or the device comes back online, and treats more than 4 s without any message (the server sends 20 states a
+  second) as a dead socket. A reloaded page joins by name and takes the dropped caster over the same way.
