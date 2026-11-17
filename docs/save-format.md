@@ -21,7 +21,7 @@ Duels are never saved; walking into the arena counts as leaving the co-op game, 
   "version": 4,
   "room": "friday",
   "savedAt": 1763330000000,
-  "maxDepth": 7,                       // deepest floor anyone reached (Recall from the surface goes there)
+  "maxDepth": 7,                       // deepest floor anyone reached (only used to give older saves a recall depth)
   "foundMythics": ["gungnir"],         // mythic kinds already dropped (each drops once per game)
   "foundBooks": ["fire", "wall"],      // spell ids whose books dropped (new drops prefer others)
   "bestiary": { "slime": 41, "mage": 12 },  // kills per enemy type (zoo pens open from this)
@@ -49,6 +49,7 @@ Duels are never saved; walking into the arena counts as leaving the co-op game, 
       "name": "Ann", "floor": 4, "x": 12.4, "y": 8.9,
       "hp": 52, "dead": false, "level": 9, "xp": 120,
       "kills": 210, "blocks": 77, "ward": 0, "gold": 640, "practiceBest": 14,
+      "deepest": 7, "recallDepth": 5,  // this caster's deepest floor and Word of Recall depth (missing: party maxDepth)
       "pack":  [ /* items */ ],
       "home":  [ /* items in their house */ ],
       "equip": { "weapon": { "kind": "c_staff", "mat": 1, "n": 1 }, "shield": null, "ring": null, "neck": null,

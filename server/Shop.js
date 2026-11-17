@@ -13,7 +13,7 @@ export const SHOP_TABS = ['magic', 'weapons', 'armour', 'sell'];
 
 /** What the shop always has (as much as you like). mat = material index (0 Bronze, 1 Iron). */
 const STOCK = [
-  ...['pot_heal', 'pot_speed', 'pot_ward', 'scr_tele', 'scr_slow', 'scr_life', 'scr_recall', 'scr_d10', 'scr_d20', 'scr_d30', 'scr_d40', 'scr_d50']
+  ...['pot_heal', 'pot_speed', 'pot_ward', 'scr_tele', 'scr_slow', 'scr_life', 'scr_recall', 'scr_deep', 'scr_d10', 'scr_d20', 'scr_d30', 'scr_d40', 'scr_d50']
     .map(kind => ({ kind })),
   // a few beginner spellbooks; the rest are found in the dungeon
   ...['bk_light', 'bk_fire', 'bk_ice', 'bk_thorn', 'bk_push'].map(kind => ({ kind })),
