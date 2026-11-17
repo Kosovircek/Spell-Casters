@@ -163,6 +163,14 @@ export class Room {
     if (saved) pl.tell('Welcome back! Your gear was saved.');
     return pl;
   }
+  /** A caster whose connection dropped is back on a new socket: send them what a join would (they stay where they are). */
+  resume(pl) {
+    const lv = this.levelOf(pl);
+    pl.send({ t: 'welcome', id: pl.id, room: this.code, resumed: true });
+    if (lv) pl.send(lv.mapMessage());
+    pl.sendGrimoire();
+    lv?.say(`${pl.name} is back`, 2);
+  }
   removePlayer(pl) {
     this.players.delete(pl.id);
     const lv = this.levelOf(pl);

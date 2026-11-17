@@ -271,6 +271,7 @@ sequenceDiagram
   participant R as Room
   B->>GS: WebSocket /ws
   B->>GS: {t:'join', name, room}
+  GS-->>B: {t:'session', token}
   GS->>R: roomFor(room) (loads saves/room.json if any)
   alt room full
     GS-->>B: {t:'full', max} and close
@@ -284,7 +285,11 @@ sequenceDiagram
   end
   B->>GS: {t:'goto', to:'arena'} at the arena gate
   GS-->>B: welcome (duel:true) + map (duel:true), same socket
-  B->>GS: socket closes
+  B->>GS: socket drops (phone in the background)
+  Note over GS,R: caster stays, standing still, for the grace period
+  B->>GS: new socket, {t:'resume', token}
+  GS-->>B: session + welcome (resumed) + map + grimoire
+  B->>GS: {t:'leave'} from the Esc menu, or the grace period runs out
   GS->>R: removePlayer → progress kept in savedPlayers, save()
 ```
 

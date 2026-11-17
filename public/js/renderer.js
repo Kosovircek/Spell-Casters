@@ -21,6 +21,11 @@ export class Renderer {
     this.shake = 0; this.flash = 0;
     this.textCache = {};
     addEventListener('resize', () => this.resize());
+    // Phones report the new size a moment after turning the screen or coming back from the background: fit again then.
+    const refit = () => { this.resize(); setTimeout(() => this.resize(), 250); };
+    addEventListener('orientationchange', refit);
+    document.addEventListener('visibilitychange', refit);
+    document.addEventListener('fullscreenchange', refit);
     this.resize();
   }
 

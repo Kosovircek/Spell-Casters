@@ -5,6 +5,13 @@ export const DT = TICK_MS / 1000;         // seconds per tick
 export const MAP_W = 48, MAP_H = 48;      // dungeon size in tiles
 export const MAX_PLAYERS = 4;
 
+/**
+ * Dropped connections. A phone that puts the browser in the background (or turns the screen) often loses its
+ * socket; the caster stays in the game, standing still and unseen by enemies, for graceMs so the page can come
+ * back to it. The server pings every socket each heartbeatMs and hangs up on one that did not answer the last ping.
+ */
+export const RECONNECT = { graceMs: +process.env.RECONNECT_GRACE_MS || 180000, heartbeatMs: 15000 };
+
 export const PLAYER = {
   speed: 3.6,          // tiles per second
   radius: 0.3,

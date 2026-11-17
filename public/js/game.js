@@ -70,6 +70,8 @@ export class Game {
     $('leave-arena').onclick = () => this.leaveArena();
     $('leave-game').onclick = () => this.leaveGame();
     this.listen();
+    // Keys and fingers lifted while the page is in the background never send their release: stop walking now.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && this.hud.visible) this.input.stopWalking(); });
   }
 
   /** Start drawing (the title screen until the player joins). */
@@ -101,7 +103,7 @@ export class Game {
 
   /**
    * A welcome arrives when I join, and again each time I walk into the arena or back out of it (a new room
-   * on the same connection). Start that room clean: no half-typed spell, no open menu, nobody walking.
+   * on the same connection), and after a dropped connection comes back (resumed). Start a new room clean: no half-typed spell, no open menu, nobody walking.
    */
   onWelcome(m) {
     const switching = this.myId !== null;
@@ -111,6 +113,13 @@ export class Game {
     if (m.duel) { this.cheatWasHidden = $('side').hidden; $('side').hidden = true; } // the cheat sheet would cover one end of the duel platform (H shows it)
     else if (switching && this.cheatWasHidden !== undefined) $('side').hidden = this.cheatWasHidden;
     this.typingSent = null; // the new room has not heard what I am typing
+    if (m.resumed) { // back after a dropped connection: same caster, same room, keep my half-typed spell
+      this.hud.banner('Reconnected', 1200);
+      this.input.lastMove = null;
+      this.input.stopWalking(); // fingers and keys lifted while the page was away never sent their release
+      this.shareTyping();
+      return;
+    }
     if (!switching) return;
     this.morse.clear();
     this.inventory.close(); this.store.close(); this.ring.close(); this.grimoire.close();
@@ -164,7 +173,7 @@ export class Game {
       .on('learned', (m) => { this.grimoire.learned(m); this.audio.play('chest'); })
       .on('drop', () => { if (this.morse.spell || this.morse.buf) { this.morse.clear(); this.hud.message('Something cold brushes past: your spell slips away!'); } })
       .on('scramble', () => this.scrambleSpell())
-      .on('close', () => { if (this.hud.visible) this.hud.banner('Disconnected. Refresh to rejoin.', 99999); });
+      .on('reconnecting', () => { if (this.hud.visible) this.hud.banner('Connection lost. Reconnecting...', 99999); });
   }
 
   onState(state) {
